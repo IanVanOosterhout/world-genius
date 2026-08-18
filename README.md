@@ -70,24 +70,41 @@ finished round can set a personal best, which is what makes resuming worth havin
 
 ## Rebuilding
 
-`index.html` is generated. The inputs live in `build/`:
+`index.html` is generated. The inputs live in `build/`. Almost every change needs only the last
+step:
 
 ```bash
-cd build && node build_map.js && python3 build_sat.py && node build_app.js
+node build/build_app.js
 ```
 
-`build_map.js` simplifies and projects the Natural Earth borders into `map_data.json`;
-`build_sat.py` reprojects `bluemarble_21600.jpg` into the tile pyramid under `sat/`;
-`build_app.js` inlines all of that plus `facts_all.json` and `flags/*.webp` into
-`app_template.html` to produce `index.html`. Edit clues in `facts_all.json` and re-run
-`build_app.js` alone. That file is kept readable, one clue per line, grouped by region and
-alphabetical by country within each region.
+`build_app.js` inlines `map_data.json`, `facts_all.json`, `flags/*.webp` and the satellite tiles
+into `app_template.html` and writes `index.html`, in a second or two. It parses the generated
+inline script before writing, so a malformed injection fails at the terminal instead of shipping
+a blank app to the browser. Edit clues in `facts_all.json` and re-run this alone. That file is
+kept readable, one clue per line, grouped by region and alphabetical by country within each
+region.
 
-`build_sat.py` takes an optional WebP quality argument and needs `numpy` and `Pillow`. It is the
-slow step, about 90 seconds and roughly 1.5 GB of memory, but its output only changes if the
-projection or the source imagery does. The source is NASA's public-domain Blue Marble at
-21600x10800, from
-<https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73909/world.topo.bathy.200412.3x21600x10800.jpg>.
+The other two steps rebuild `build_app.js`'s own inputs, and are only needed when the sources of
+those inputs change:
+
+- `node build/build_map.js` simplifies and projects the Natural Earth borders in
+  `world50.geojson` into `map_data.json`. Run it if the borders or the projection change.
+- `python3 build/build_sat.py` reprojects `bluemarble_21600.jpg` into the tile pyramid under
+  `sat/`. It takes an optional WebP quality argument and needs `numpy` and `Pillow`. It is the
+  slow step, about 90 seconds and roughly 1.5 GB of memory, but its output only changes if the
+  projection or the source imagery does. The source is NASA's public-domain Blue Marble at
+  21600x10800, from
+  <https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73909/world.topo.bathy.200412.3x21600x10800.jpg>.
+
+`build_sat.py` reads `map_data.json` for the projection it has to match, so the order matters: a
+run of `build_map.js` must be followed by `build_sat.py` before `build_app.js`. All three resolve
+their paths from their own location, so they can be run from anywhere, and the full chain is:
+
+```bash
+node build/build_map.js && python3 build/build_sat.py && node build/build_app.js
+```
+
+Publish the result with `./deploy.sh`, below.
 
 ## Publishing
 
