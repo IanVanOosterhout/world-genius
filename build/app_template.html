@@ -103,6 +103,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 }
 .rng input:focus-visible{box-shadow:0 0 0 2px rgba(78,168,255,.45)}
 .rng .val{font-size:12.5px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+/* Who the scores are being recorded under, with the way to hand the game to someone else. */
+.playerbar{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px 11px 16px}
+.playerbar .who{flex:1;min-width:0;font-size:12.5px;color:var(--faint);line-height:1.3}
+.playerbar .who b{display:block;color:var(--ink);font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.playerbar button{flex:0 0 auto;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--dim);border:1px solid var(--line);background:var(--bg)}
+.playerbar button:hover{color:var(--ink);border-color:var(--accent)}
+.playerbar button.lead{color:var(--gold);border-color:rgba(251,191,36,.38)}
 .foot{text-align:center;color:var(--faint);font-size:11.5px;line-height:1.6}
 
 /* ---------- GAME ---------- */
@@ -258,6 +265,51 @@ svg#map.grabbing{cursor:grabbing}
 .res-btns{display:flex;flex-direction:column;gap:10px}
 .res-btns .btn{flex:none}
 
+/* ---------- LEADERBOARD ---------- */
+#board{overflow-y:auto;padding:22px 16px calc(22px + var(--safeb));padding-top:calc(22px + env(safe-area-inset-top,0px))}
+.board-inner{width:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:15px}
+.board-head{display:flex;align-items:center;gap:10px}
+.board-head h2{margin:0;font-size:25px;font-weight:800;letter-spacing:-.025em;flex:1}
+#boardSeg button{flex:1}
+.board-sub{margin:0;color:var(--dim);font-size:12.5px;text-align:center;line-height:1.55}
+.lb{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.lb .r{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.lb .r:last-child{border-bottom:none}
+.lb .r.me{background:rgba(78,168,255,.07)}
+.lb .rk{width:27px;height:27px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+  font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;background:var(--panel2);color:var(--dim)}
+.lb .r.p1 .rk{background:rgba(251,191,36,.2);color:var(--gold)}
+.lb .r.p2 .rk{background:rgba(203,213,225,.16);color:#cbd5e1}
+.lb .r.p3 .rk{background:rgba(224,149,95,.18);color:#e0955f}
+.lb .nm{flex:1;min-width:0}
+.lb .nm b{display:block;font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb .nm .you{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-left:6px}
+.lb .nm small{display:block;color:var(--faint);font-size:11.5px;margin-top:2px}
+.lb .sc{flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums}
+.lb .sc b{display:block;font-size:16px;font-weight:800}
+.lb .sc small{display:block;color:var(--faint);font-size:11px;margin-top:1px}
+.lb-empty{padding:26px 18px;text-align:center;color:var(--dim);font-size:13.5px;line-height:1.6}
+
+/* ---------- NAME GATE ---------- */
+/* Asked once on the first visit, and again only when someone hands the device over. */
+#gate{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:20px;background:rgba(6,10,20,.9);backdrop-filter:blur(7px)}
+#gate.on{display:grid}
+.gate-card{width:100%;max-width:390px;background:linear-gradient(160deg,var(--panel),var(--bg2));
+  border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--sh);max-height:calc(100dvh - 40px);overflow-y:auto}
+.gate-card h2{margin:0 0 7px;font-size:21px;font-weight:800;letter-spacing:-.02em}
+.gate-card p.msg{margin:0 0 16px;color:var(--dim);font-size:13.5px;line-height:1.55}
+.gate-card input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:11px;
+  padding:13px 14px;font:inherit;font-size:16px;color:var(--ink);outline:none}
+.gate-card input:focus{border-color:var(--accent)}
+.gate-card input::placeholder{color:var(--faint)}
+.who-list{display:flex;flex-direction:column;gap:8px;margin-bottom:15px;max-height:200px;overflow-y:auto}
+.who-list button{display:flex;align-items:center;width:100%;text-align:left;background:var(--bg);
+  border:1px solid var(--line);border-radius:11px;padding:12px 14px;font-size:14.5px;font-weight:600}
+.who-list button:hover{border-color:var(--accent)}
+.gate-or{margin:0 0 8px;color:var(--faint);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:700}
+.gate-err{color:var(--bad);font-size:12.5px;min-height:17px;margin-top:7px}
+.gate-btns{display:flex;gap:10px}
+
 @media (min-width:860px) and (orientation:landscape){
   .prompt{min-height:88px}
   .qtext{font-size:18px}
@@ -273,6 +325,12 @@ svg#map.grabbing{cursor:grabbing}
       <div class="brand">
         <h1>World Genius</h1>
         <p>Read the clue, study the flag, or name the capital, then find the country on the map.</p>
+      </div>
+
+      <div class="playerbar" id="playerBar" hidden>
+        <span class="who">Playing as<b id="playerName"></b></span>
+        <button id="switchBtn">Switch</button>
+        <button class="lead" id="boardBtn">Leaderboard</button>
       </div>
 
       <div class="resume" id="resumeCard" hidden>
@@ -357,7 +415,7 @@ svg#map.grabbing{cursor:grabbing}
         </div>
       </div>
 
-      <p class="foot">197 countries &middot; 995 clues &middot; works offline<br>Borders: Natural Earth (public domain)</p>
+      <p class="foot">197 countries &middot; 1,970 clues &middot; works offline<br>Borders: Natural Earth (public domain)</p>
     </div>
   </section>
 
@@ -407,10 +465,47 @@ svg#map.grabbing{cursor:grabbing}
       <div class="review" id="rReview"></div>
       <div class="res-btns">
         <button class="btn" id="againBtn">Play again</button>
+        <button class="btn ghost" id="rBoardBtn" style="flex:none">Leaderboard</button>
         <button class="btn ghost" id="homeBtn" style="flex:none">Back to menu</button>
       </div>
     </div>
   </section>
+
+  <!-- LEADERBOARD -->
+  <section id="board" class="screen">
+    <div class="board-inner">
+      <div class="board-head">
+        <button class="icobtn" id="boardBack" aria-label="Back to menu" title="Back to menu">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2>Leaderboard</h2>
+      </div>
+      <div class="seg" id="boardSeg" role="radiogroup" aria-label="Leaderboard mode">
+        <button role="radio" data-bmode="fact">Fact</button>
+        <button role="radio" data-bmode="flag">Flag</button>
+        <button role="radio" data-bmode="capital">Capital</button>
+      </div>
+      <p class="board-sub" id="boardSub"></p>
+      <div class="lb" id="lbList"></div>
+      <button class="btn ghost" id="boardPlay" style="flex:none">Play this mode</button>
+    </div>
+  </section>
+
+  <!-- NAME GATE -->
+  <div id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
+    <div class="gate-card">
+      <h2 id="gateTitle">Who is playing?</h2>
+      <p class="msg" id="gateMsg"></p>
+      <div class="who-list" id="gateList" hidden></div>
+      <p class="gate-or" id="gateOr" hidden>Or add someone new</p>
+      <input id="gateInput" type="text" maxlength="14" placeholder="Your name" autocomplete="off" spellcheck="false" aria-label="Player name">
+      <div class="gate-err" id="gateErr"></div>
+      <div class="gate-btns">
+        <button class="btn" id="gateGo">Start playing</button>
+        <button class="btn ghost" id="gateCancel" hidden>Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Flag lightbox -->
   <div id="flagZoom" role="dialog" aria-modal="true" aria-label="Enlarged flag" hidden>
@@ -445,7 +540,114 @@ let settings = { len: store.get("len",10), reg: store.get("reg","all"), assist: 
                  zoomSens: store.get("zoomSens",1) };
 // A bad or out-of-range stored value would make the map unzoomable, so pin it to the slider's range.
 settings.zoomSens = Math.min(2.5, Math.max(0.3, +settings.zoomSens || 1));
-let best = store.get("best", {});
+
+/* ===== Players and the leaderboard =====
+   Names live in this browser only, so the board ranks whoever has played on this device: a
+   phone or a laptop passed round a table. Every name ever entered is kept, so a friend taking
+   another turn taps their name instead of typing it again, and each person is asked for a name
+   exactly once. Personal bests are per player, not per device, or one housemate would inherit
+   another's. */
+const ESC_MAP = {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+const esc = v => String(v).replace(/[&<>"']/g, c => ESC_MAP[c]);
+const NAME_MAX = 14;
+/* One spelling, one player: control characters out, runs of whitespace collapsed, length
+   capped. Otherwise "Ian " and "Ian" would hold separate rows, and a long name would push the
+   score off the end of a phone-width row. */
+function cleanName(v){
+  return String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim().slice(0, NAME_MAX);
+}
+const same = (a,b) => a.toLowerCase() === b.toLowerCase();
+
+const storedNames = store.get("players", []);
+let players = (Array.isArray(storedNames) ? storedNames : []).map(cleanName).filter(Boolean);
+players = players.filter((n,i) => players.findIndex(m => same(m,n)) === i);
+let player = cleanName(store.get("player", ""));
+if(player && !players.some(n => same(n,player))) players.push(player);
+
+/* One record per player per setup, holding their best round of it, rather than a history of
+   every round: a leaderboard only ever shows the best, and a growing log would have no bound. */
+const sKey = (name,mode,len,reg) => name.toLowerCase()+"|"+mode+"|"+len+"|"+reg;
+function cleanScores(x){
+  const out = {};
+  if(!x || typeof x !== "object") return out;
+  for(const k in x){
+    const e = x[k];
+    if(!e || typeof e !== "object") continue;
+    const name = cleanName(e.name), len = e.len, reg = typeof e.reg === "string" ? e.reg : "all";
+    if(!name || !MODE_LABEL[e.mode]) continue;
+    if(!Number.isInteger(len) || len < 1 || len > 200) continue;
+    if(!Number.isInteger(e.score) || e.score < 0 || e.score > len) continue;
+    const rec = { name, mode:e.mode, len, reg, score:e.score,
+      streak: Number.isInteger(e.streak) && e.streak >= 0 ? Math.min(e.streak, len) : 0,
+      rounds: Number.isInteger(e.rounds) && e.rounds > 0 ? e.rounds : 1,
+      at: Number.isFinite(e.at) && e.at >= 0 ? e.at : 0 };
+    const key = sKey(name, rec.mode, len, reg), prev = out[key];
+    if(!prev) out[key] = rec;
+    else {
+      prev.rounds += rec.rounds;
+      if(rec.score > prev.score){ prev.score = rec.score; prev.streak = rec.streak; prev.at = rec.at; }
+    }
+  }
+  return out;
+}
+let scores = cleanScores(store.get("scores", {}));
+
+const bestScore = (mode,len,reg,name) => {
+  const e = scores[sKey(name || player, mode, len, reg)];
+  return e ? e.score : undefined;
+};
+
+/* Ranked by score, then by the longest streak that made it, then by who got there first, so a
+   tie is never broken by a reload or by the order names happen to sit in the store. */
+function boardRows(mode,len,reg){
+  const rows = [];
+  for(const k in scores){
+    const e = scores[k];
+    if(e.mode === mode && e.len === len && e.reg === reg) rows.push(e);
+  }
+  return rows.sort((a,b) => b.score - a.score || b.streak - a.streak || a.at - b.at || a.name.localeCompare(b.name));
+}
+
+function recordRound(){
+  if(!player) return;
+  const len = state.queue.length, key = sKey(player, state.mode, len, state.reg), e = scores[key];
+  if(!e){
+    scores[key] = { name:player, mode:state.mode, len, reg:state.reg,
+      score:state.score, streak:state.bestStreak, rounds:1, at:Date.now() };
+  }else{
+    e.rounds++;
+    e.name = player;   // adopt the current spelling of a name matched case-insensitively
+    if(state.score > e.score){ e.score = state.score; e.streak = state.bestStreak; e.at = Date.now(); }
+  }
+  store.set("scores", scores);
+}
+
+/* A device that played before the leaderboard existed has one anonymous set of personal bests.
+   They belong to whoever names themselves first, so carry them across instead of dropping
+   them. Runs once: the old key is removed on the way out. */
+function migrateBest(name){
+  const old = store.get("best", null);
+  if(!old || typeof old !== "object"){ store.del("best"); return; }
+  for(const k in old){
+    const m = /^(fact|flag|capital)_(\d+)_(.+)$/.exec(k), sc = old[k];
+    if(!m || !Number.isInteger(sc)) continue;
+    const len = +m[2];
+    if(sc < 0 || sc > len) continue;
+    const key = sKey(name, m[1], len, m[3]);
+    if(!scores[key] || scores[key].score < sc)
+      scores[key] = { name, mode:m[1], len, reg:m[3], score:sc, streak:0, rounds:1, at:0 };
+  }
+  store.del("best");
+  store.set("scores", scores);
+}
+
+function setPlayer(name){
+  player = name;
+  if(!players.some(n => same(n,name))) players.push(name);
+  store.set("player", player);
+  store.set("players", players);
+  migrateBest(name);
+}
 
 /* ===== Build map ===== */
 const svg = $("map");
@@ -892,10 +1094,10 @@ function cleanSeen(x){
    Written on every tap and every answer so a reload, a crash or a closed tab can pick the
    round back up. Only whole rounds count towards a personal best, so this is the one thing
    that would otherwise be lost. Bumped if the shape below ever changes. */
-const ROUND_V = 2;
+const ROUND_V = 3;
 function saveRound(){
   if(state.phase==="idle") return;
-  store.set("round", { v:ROUND_V, mode:state.mode, reg:state.reg, queue:state.queue, i:state.i,
+  store.set("round", { v:ROUND_V, player:player, mode:state.mode, reg:state.reg, queue:state.queue, i:state.i,
     score:state.score, streak:state.streak, bestStreak:state.bestStreak, sel:state.sel,
     log:state.log, phase:state.phase, clue:state.clue, seen:seen });
 }
@@ -907,6 +1109,9 @@ function dropRound(){ store.del("round"); paintResume(); }
 function loadRound(){
   const r = store.get("round", null);
   if(!r || r.v!==ROUND_V || !MODE_LABEL[r.mode]) return null;
+  // An unfinished round is only offered back to whoever left it, so a switch of player cannot
+  // drop someone else's round onto your score.
+  if(!same(cleanName(r.player), player)) return null;
   if(r.phase!=="answering" && r.phase!=="revealed") return null;
   if(!Array.isArray(r.queue) || !r.queue.length || !r.queue.every(i=>C[i])) return null;
   if(!Number.isInteger(r.i) || r.i<0 || r.i>=r.queue.length) return null;
@@ -1085,21 +1290,29 @@ function paintReveal(ans,pick,ok){
   renderAct();
 }
 
+/* 1st, 2nd, 3rd, 11th: the -teens are the exception the simple rule gets wrong. */
+function ord(n){ const t=["th","st","nd","rd"], v=n%100; return n+(t[(v-20)%10]||t[v]||t[0]); }
+
 function finish(){
   const n=state.queue.length, s=state.score;
-  const key = state.mode+"_"+n+"_"+state.reg;
-  const prev = best[key]||0;
-  if(s>prev){ best[key]=s; store.set("best",best); }
+  const prev = bestScore(state.mode,n,state.reg)||0;
+  recordRound();
   state.phase="idle";
   dropRound();
   const pct = Math.round(s/n*100);
   $("rScore").textContent=s; $("rOf").textContent="/"+n;
   $("rAcc").textContent=pct+"%";
   $("rStreak").textContent=state.bestStreak;
-  $("rBest").textContent=(best[key]||0)+"/"+n;
+  $("rBest").textContent=(bestScore(state.mode,n,state.reg)||0)+"/"+n;
   const grades=[[90,"World Genius &#127942;"],[75,"Globetrotter &#9992;"],[55,"Solid navigator &#129517;"],[35,"Getting your bearings &#128506;"],[0,"Room to explore &#127760;"]];
   $("rGrade").innerHTML = grades.find(g=>pct>=g[0])[1];
-  $("rSub").textContent = s>prev && s>0 ? "New personal best for this setup!" : `${MODE_SHORT[state.mode]} Mode · ${state.reg==="all"?"World":state.reg}`;
+  // Where the round leaves them on the board for the setup they just played.
+  const rows = boardRows(state.mode,n,state.reg);
+  const pos = rows.findIndex(e=>same(e.name,player));
+  $("rSub").textContent =
+    (s>prev && s>0 ? "New personal best! " : "") +
+    `${MODE_SHORT[state.mode]} Mode · ${state.reg==="all"?"World":state.reg}` +
+    (rows.length>1 && pos>=0 ? ` · ${ord(pos+1)} of ${rows.length} here` : "");
   $("rReview").innerHTML = state.log.map(r=>{
     const a=C[r.ans];
     return `<div class="rev">
@@ -1127,11 +1340,42 @@ function paintResume(){
   card.hidden = false; card.classList.add("on");
 }
 function paintBest(){
-  const k = m => m+"_"+settings.len+"_"+settings.reg;
   for(const [m,el] of [["fact",$("bestFact")],["flag",$("bestFlag")],["capital",$("bestCapital")]]){
-    const b=best[k(m)];
+    const b = bestScore(m, settings.len, settings.reg);
     el.innerHTML = b===undefined ? "" : `${b}/${settings.len}<small>best</small>`;
   }
+}
+function paintPlayer(){
+  $("playerBar").hidden = !player;
+  $("playerName").textContent = player;
+}
+
+/* The board shows one setup at a time, the one selected on the home screen, because a score is
+   only worth comparing against the same mode, the same number of questions and the same region.
+   Its own tabs pick the mode, since that is the one people flip between. */
+let boardMode = "fact";
+function paintBoard(){
+  for(const b of $("boardSeg").children) b.setAttribute("aria-checked", String(b.dataset.bmode===boardMode));
+  const len = settings.len, reg = settings.reg, regName = reg==="all" ? "World" : reg;
+  $("boardSub").textContent =
+    `${len} questions · ${regName}. Change the round length or region on the home screen for the other boards.`;
+  const rows = boardRows(boardMode, len, reg);
+  $("lbList").innerHTML = rows.length
+    ? rows.map((e,i)=>{
+        const me = same(e.name, player);
+        return `<div class="r${i<3?" p"+(i+1):""}${me?" me":""}">
+          <span class="rk">${i+1}</span>
+          <span class="nm"><b>${esc(e.name)}${me?'<span class="you">you</span>':""}</b><small>${e.rounds} round${e.rounds===1?"":"s"} · best streak ${e.streak}</small></span>
+          <span class="sc"><b>${e.score}/${e.len}</b><small>${Math.round(e.score/e.len*100)}%</small></span>
+        </div>`;
+      }).join("")
+    : `<div class="lb-empty">Nobody has finished a ${MODE_SHORT[boardMode].toLowerCase()} round of ${len} questions${reg==="all"?"":" in "+regName} yet.<br>Play one to open the board.</div>`;
+}
+function showBoard(mode){
+  boardMode = MODE_LABEL[mode] ? mode : "fact";
+  paintBoard();
+  show("board");
+  $("board").scrollTop = 0;
 }
 function paintSettings(){
   for(const b of $("lenSeg").children) b.setAttribute("aria-checked", String(+b.dataset.len===settings.len));
@@ -1154,12 +1398,61 @@ $("styleSeg").onclick = e=>{
 $("zoomRng").oninput = e=>{ settings.zoomSens=+e.target.value; store.set("zoomSens",settings.zoomSens); paintSettings(); };
 $("assistSw").onclick = ()=>{ settings.assist=!settings.assist; store.set("assist",settings.assist); paintSettings(); if(state.phase==="answering") renderAct(); };
 for(const b of document.querySelectorAll(".mode")) b.onclick = ()=>startRound(b.dataset.mode);
-function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); }
+function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); paintPlayer(); }
 $("quitBtn").onclick = goHome;
 $("resumeBtn").onclick = resumeRound;
 $("resumeDrop").onclick = dropRound;
 $("againBtn").onclick = ()=>startRound(state.mode);
 $("homeBtn").onclick = goHome;
+$("boardBtn").onclick = ()=>showBoard(state.mode);
+$("rBoardBtn").onclick = ()=>showBoard(state.mode);
+$("boardBack").onclick = goHome;
+$("boardSeg").onclick = e=>{ const b=e.target.closest("button"); if(!b)return; boardMode=b.dataset.bmode; paintBoard(); };
+$("boardPlay").onclick = ()=>startRound(boardMode);
+
+/* ===== Name gate =====
+   Two ways in: the first visit, where there is no way past it, and the Switch button, where the
+   names already known are offered as buttons and Cancel goes back. Either way a name is typed
+   once and never asked for again. */
+const gate = $("gate");
+let gateMode = "first";
+const gateOpen = () => gate.classList.contains("on");
+function openGate(mode){
+  gateMode = mode;
+  const others = players.filter(n=>!same(n,player)), pick = mode==="switch" && others.length>0;
+  $("gateList").hidden = !pick;
+  $("gateOr").hidden = !pick;
+  $("gateList").innerHTML = pick ? others.map(n=>`<button type="button" data-who="${esc(n)}">${esc(n)}</button>`).join("") : "";
+  $("gateTitle").textContent = mode==="first" ? "Who is playing?" : "Switch player";
+  $("gateMsg").textContent = mode==="first"
+    ? "Enter your name once. It is saved on this device, and every round you finish goes on the leaderboard under it."
+    : "Hand the game over: tap a name, or add someone new. Each name keeps its own scores and personal bests.";
+  $("gateGo").textContent = mode==="first" ? "Start playing" : "Add player";
+  $("gateCancel").hidden = mode==="first";
+  $("gateInput").value = "";
+  $("gateErr").textContent = "";
+  gate.hidden = false; gate.classList.add("on");
+  // A keyboard springing up unasked on load is startling on a phone, so only focus where
+  // there is a real one to focus into.
+  if(!COARSE) $("gateInput").focus();
+}
+function closeGate(){ gate.classList.remove("on"); gate.hidden = true; }
+function chooseName(raw){
+  const n = cleanName(raw);
+  if(!n){ $("gateErr").textContent = "Enter a name to play."; $("gateInput").focus(); return; }
+  // Typing a name that is already known picks that player up rather than starting a second row
+  // for them under a different capitalisation.
+  const known = players.find(m=>same(m,n));
+  setPlayer(known || n);
+  closeGate();
+  goHome();
+}
+$("gateGo").onclick = ()=>chooseName($("gateInput").value);
+$("gateCancel").onclick = closeGate;
+$("gateList").onclick = e=>{ const b=e.target.closest("button[data-who]"); if(b) chooseName(b.dataset.who); };
+$("gateInput").oninput = ()=>{ if($("gateErr").textContent) $("gateErr").textContent=""; };
+$("gateInput").onkeydown = e=>{ if(e.key==="Enter"){ e.preventDefault(); chooseName($("gateInput").value); } };
+$("switchBtn").onclick = ()=>openGate("switch");
 /* Flag lightbox: tap the prompt flag, or the answer flag after any question, to see it
    big; tap anywhere (or Esc) to dismiss. */
 const flagZoom = $("flagZoom");
@@ -1186,10 +1479,12 @@ flagZoom.onclick = closeFlagZoom;
 
 addEventListener("keydown", e=>{
   if(e.key==="Escape"){
+    if(gateOpen()){ if(gateMode==="switch"){ e.preventDefault(); closeGate(); } return; }
     if(flagZoomOpen()){ e.preventDefault(); closeFlagZoom(); return; }
     if($("game").classList.contains("on")) goHome();
   }
   if(e.key==="Enter"){
+    if(gateOpen()) return;   // the name field handles its own Enter
     if(flagZoomOpen()){ e.preventDefault(); closeFlagZoom(); return; }
     const c=$("confirmBtn")||$("nextBtn");
     if(c && $("game").classList.contains("on")){ e.preventDefault(); c.click(); }
@@ -1199,7 +1494,9 @@ addEventListener("keydown", e=>{
 applySat();
 paintSettings();
 paintResume();
+paintPlayer();
 resetView();
+if(!player) openGate("first");
 </script>
 </body>
 </html>

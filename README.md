@@ -61,7 +61,27 @@ Kosovo.
 - **Name assist**, off by default. Turn it on to see a country's name before you confirm;
   leaving it off is the real test, since you only see the shape you highlighted.
 
-Scores, best streaks and personal bests are kept per mode/length/region in `localStorage`.
+## The leaderboard
+
+The first time the game is opened it asks for a name, once, and remembers it. Every finished
+round goes on the leaderboard under that name, reached from the button on the home screen or from
+the results screen.
+
+**Switch** on the home screen hands the game to someone else: tap a name that has played before,
+or type a new one. Each person is only ever asked for a name once. Scores, personal bests and the
+resume card are per player, so a friend taking a turn cannot inherit or overwrite yours.
+
+A board covers one setup at a time, since a score is only worth comparing against the same mode,
+the same number of questions and the same region. Its tabs pick the mode; the round length and
+region come from the home screen. Ranking is by score, then by the longest streak behind it, then
+by whoever got there first.
+
+Everything is stored in `localStorage`, so a board ranks whoever has played in that browser: one
+device passed round a table. Friends on their own phones each keep their own board, and comparing
+those means comparing screens.
+
+Scores, best streaks and personal bests are kept per player and per mode/length/region in
+`localStorage`.
 
 An unfinished round is saved too, on every tap and every answer. Reload, close the tab or quit
 with the X and the home screen offers it back with a **Resume** button, on the same question with
