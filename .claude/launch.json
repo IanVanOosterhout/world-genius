@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "world-genius",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8731", "--directory", "/Users/ianvanoosterhout/Projects/world_genius"],
+      "port": 8731
+    }
+  ]
+}

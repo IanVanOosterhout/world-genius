@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d1220">
+<meta name="description" content="World Genius - guess the country from a fact or a flag by finding it on the world map.">
+<title>World Genius</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127758;</text></svg>">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#0d1220; --bg2:#141c31; --panel:#18213a; --panel2:#1f2a47;
+  --line:#2c3a5f; --ink:#eaf0ff; --dim:#94a3c4; --faint:#64748b;
+  --sea:#0f1729; --land:#33415f; --land2:#3d4c6d; --border:#0f1729;
+  --terr:#232e49;
+  --accent:#4ea8ff; --accent2:#7c5cff;
+  --good:#22c55e; --bad:#ef4444; --gold:#fbbf24;
+  --r:14px; --sh:0 8px 30px rgba(0,0,0,.45);
+  --safeb:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; overscroll-behavior:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#app{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+@supports (height:100dvh){#app{height:100dvh}}
+.screen{display:none;flex:1;min-height:0;flex-direction:column}
+.screen.on{display:flex}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- HOME ---------- */
+#home{overflow-y:auto;align-items:center;padding:24px 18px calc(24px + var(--safeb))}
+.home-inner{width:100%;max-width:520px;margin:auto;display:flex;flex-direction:column;gap:22px}
+.brand{text-align:center}
+.brand h1{
+  margin:0;font-size:clamp(38px,11vw,58px);font-weight:800;letter-spacing:-.03em;line-height:1;
+  background:linear-gradient(100deg,#7dd3fc,#4ea8ff 40%,#a78bfa);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.brand p{margin:10px 0 0;color:var(--dim);font-size:15px;line-height:1.5}
+/* Offer back a round that a reload or a closed tab interrupted. */
+.resume{
+  display:none;align-items:center;gap:12px;
+  background:linear-gradient(160deg,var(--panel),var(--bg2));
+  border:1px solid var(--accent);border-radius:var(--r);padding:13px 12px 13px 16px;box-shadow:var(--sh);
+}
+.resume.on{display:flex}
+.resume .rz{flex:1;min-width:0}
+.resume .rz b{display:block;font-size:15px;font-weight:700}
+.resume .rz small{display:block;color:var(--dim);font-size:12.5px;margin-top:3px;line-height:1.4}
+.resume .btn{flex:0 0 auto;padding:10px 16px;font-size:14px}
+.modes{display:flex;flex-direction:column;gap:14px}
+.mode{
+  display:flex;align-items:center;gap:16px;text-align:left;width:100%;
+  background:linear-gradient(160deg,var(--panel),var(--bg2));
+  border:1px solid var(--line);border-radius:var(--r);padding:18px;
+  transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease;
+}
+.mode:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--sh)}
+.mode:active{transform:translateY(0)}
+.mode .ico{
+  flex:0 0 52px;height:52px;border-radius:12px;display:grid;place-items:center;font-size:26px;
+  background:rgba(78,168,255,.13);border:1px solid rgba(78,168,255,.3)
+}
+.mode.flag .ico{background:rgba(167,139,250,.13);border-color:rgba(167,139,250,.3)}
+.mode.capital .ico{background:rgba(52,211,153,.13);border-color:rgba(52,211,153,.32)}
+.mode h2{margin:0 0 3px;font-size:19px;font-weight:700}
+.mode span{color:var(--dim);font-size:13.5px;line-height:1.45;display:block}
+.mode .best{margin-left:auto;flex:0 0 auto;text-align:right;color:var(--gold);font-size:12px;font-weight:700;white-space:nowrap}
+.mode .best small{display:block;color:var(--faint);font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+
+.settings{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:6px 16px}
+.row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:none}
+.row .lbl{flex:1;min-width:0}
+.row .lbl b{display:block;font-size:14px;font-weight:600}
+.row .lbl small{color:var(--faint);font-size:12px;line-height:1.4;display:block;margin-top:2px}
+.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.seg button{padding:7px 12px;border-radius:7px;font-size:13px;font-weight:600;color:var(--dim);min-width:42px}
+.seg button[aria-checked="true"]{background:var(--accent);color:#04101f}
+.sw{flex:0 0 auto;width:48px;height:28px;border-radius:99px;background:var(--bg);border:1px solid var(--line);position:relative;transition:background .15s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--faint);transition:transform .15s,background .15s}
+.sw[aria-checked="true"]{background:rgba(78,168,255,.25);border-color:var(--accent)}
+.sw[aria-checked="true"]::after{transform:translateX(20px);background:var(--accent)}
+.rng{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.rng input{
+  -webkit-appearance:none;appearance:none;width:132px;height:4px;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent) var(--fill,50%),var(--panel2) var(--fill,50%));
+  border:1px solid var(--line);outline:none;cursor:pointer
+}
+.rng input::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--bg);box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer
+}
+.rng input::-moz-range-thumb{
+  width:16px;height:16px;border-radius:50%;background:var(--accent);
+  border:2px solid var(--bg);box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer
+}
+.rng input:focus-visible{box-shadow:0 0 0 2px rgba(78,168,255,.45)}
+.rng .val{font-size:12.5px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+.foot{text-align:center;color:var(--faint);font-size:11.5px;line-height:1.6}
+
+/* ---------- GAME ---------- */
+#game{position:relative}
+.top{display:flex;align-items:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--line);background:var(--bg2);flex:0 0 auto}
+.icobtn{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--dim);border:1px solid transparent;flex:0 0 auto}
+.icobtn:hover{background:var(--panel2);color:var(--ink)}
+.prog{flex:1;min-width:0}
+.prog .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-bottom:5px;font-weight:600;letter-spacing:.02em}
+.bar{height:5px;background:var(--panel2);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .35s ease}
+.score{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;flex:0 0 auto;text-align:right;line-height:1.15}
+.score small{display:block;font-size:9.5px;color:var(--faint);font-weight:600;letter-spacing:.08em}
+
+.prompt{flex:0 0 auto;padding:14px 16px;background:var(--bg2);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center;gap:14px;min-height:78px}
+.qtext{font-size:clamp(14.5px,3.6vw,17px);line-height:1.45;text-align:center;max-width:680px;font-weight:500}
+.flagbox{display:flex;flex-direction:column;align-items:center;gap:8px;padding:2px 0}
+.flagbox img{
+  width:min(180px,42vw);aspect-ratio:3/2;object-fit:cover;border-radius:8px;
+  border:1px solid rgba(255,255,255,.18);box-shadow:0 6px 20px rgba(0,0,0,.5);background:#fff;
+  cursor:zoom-in;transition:transform .12s ease;
+}
+.flagbox img:hover{transform:scale(1.03)}
+.flagbox span{font-size:12px;color:var(--dim);font-weight:600}
+
+/* Tap the flag to see it large: a full-screen lightbox over the whole app. */
+#flagZoom{
+  position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:24px;
+  background:rgba(6,10,20,.86);backdrop-filter:blur(7px);cursor:zoom-out;
+}
+#flagZoom.on{display:grid}
+#flagZoom img{
+  width:min(92vw,min(150vh,900px));aspect-ratio:3/2;object-fit:cover;border-radius:12px;
+  border:1px solid rgba(255,255,255,.22);box-shadow:0 24px 70px rgba(0,0,0,.65);background:#fff;
+  animation:flagPop .16s ease-out;
+}
+#flagZoom .close{
+  position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;
+  width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:rgba(20,28,49,.92);border:1px solid var(--line);color:var(--ink);
+}
+#flagZoom .close:hover{background:var(--panel2)}
+@keyframes flagPop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){
+  #flagZoom img{animation:none}
+  .flagbox img,.vflag{transition:none}
+  .flagbox img:hover,.vflag:hover{transform:none}
+}
+.capbox{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.capbox .city{font-size:clamp(22px,6vw,32px);font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.capbox .city em{font-style:normal;background:linear-gradient(100deg,#6ee7b7,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent}
+.capbox span{font-size:12.5px;color:var(--dim);font-weight:600}
+
+/* map */
+.mapwrap{flex:1;min-height:0;position:relative;background:var(--sea);overflow:hidden}
+svg#map{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+svg#map.grabbing{cursor:grabbing}
+#map .c{fill:var(--land);fill-rule:evenodd;stroke:var(--border);stroke-width:.6;vector-effect:non-scaling-stroke;stroke-linejoin:round;pointer-events:all}
+#map .t{fill:var(--terr);fill-rule:evenodd;stroke:var(--border);stroke-width:.6;vector-effect:non-scaling-stroke;pointer-events:none}
+/* Satellite view: NASA Blue Marble reprojected onto the same Equal Earth frame, so the country
+   outlines sit exactly on the imagery. Fills go transparent and borders lighten to stay legible. */
+#satLayer{display:none}
+#map.sat #satLayer{display:block}
+/* Detail tiles fade in over the coarser imagery already on screen, so sharpening up after a
+   zoom reads as a crossfade rather than a pop. */
+#satLayer .tile{opacity:0;transition:opacity .16s linear}
+#satLayer .tile.on{opacity:1}
+#map.sat .c{fill:rgba(255,255,255,0);stroke:rgba(255,255,255,.4);stroke-width:.75}
+#map.sat .t{fill:rgba(4,10,24,.34);stroke:rgba(255,255,255,.16)}
+#map.sat .c.sel{fill:rgba(78,168,255,.55);stroke:#fff}
+#map.sat .c.right{fill:rgba(34,197,94,.6);stroke:#eaffef}
+#map.sat .c.wrong{fill:rgba(239,68,68,.6);stroke:#ffecec}
+#map.sat .pin{stroke:rgba(255,255,255,.85);opacity:1}
+@media (hover:hover){#map .c:hover{fill:var(--land2)}}
+@media (hover:hover){#map.sat .c:hover{fill:rgba(255,255,255,.2)}}
+#map .c.sel{fill:var(--accent);stroke:#fff;stroke-width:1.5}
+#map .c.right{fill:var(--good);stroke:#eaffef;stroke-width:1.5}
+#map .c.wrong{fill:var(--bad);stroke:#ffecec;stroke-width:1.5}
+#map .pin{fill:#5b6c92;stroke:var(--sea);stroke-width:1;vector-effect:non-scaling-stroke;opacity:.85}
+@media (hover:hover){#map .pin:hover{fill:var(--land2);opacity:1}}
+#map .pin.sel{fill:var(--accent);stroke:#fff}
+#map .pin.right{fill:var(--good);stroke:#fff}
+#map .pin.wrong{fill:var(--bad);stroke:#fff}
+#map.locked .c,#map.locked .pin{pointer-events:none}
+.zoomctl{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+.zoomctl button{
+  width:38px;height:38px;border-radius:10px;background:rgba(20,28,49,.92);border:1px solid var(--line);
+  color:var(--ink);font-size:18px;font-weight:600;display:grid;place-items:center;backdrop-filter:blur(6px);
+}
+.zoomctl button:hover{background:var(--panel2)}
+.zoomctl button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#04101f}
+.zoomctl button svg{width:17px;height:17px}
+.hint{
+  position:absolute;left:50%;top:10px;transform:translateX(-50%);
+  background:rgba(20,28,49,.92);border:1px solid var(--line);border-radius:99px;
+  padding:6px 14px;font-size:12px;color:var(--dim);pointer-events:none;
+  backdrop-filter:blur(6px);white-space:nowrap;transition:opacity .4s;max-width:92%;overflow:hidden;text-overflow:ellipsis
+}
+.hint.hide{opacity:0}
+
+/* action bar */
+.act{flex:0 0 auto;padding:12px 14px calc(12px + var(--safeb));background:var(--bg2);border-top:1px solid var(--line);min-height:70px;display:flex;align-items:center}
+.act-in{width:100%;max-width:680px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.btn{
+  border-radius:11px;padding:13px 20px;font-weight:700;font-size:15px;
+  background:var(--accent);color:#04101f;flex:1;text-align:center;transition:filter .12s,transform .1s;
+}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:scale(.985)}
+.btn[disabled]{background:var(--panel2);color:var(--faint);cursor:not-allowed;filter:none}
+.btn.ghost{background:var(--panel2);color:var(--ink);flex:0 0 auto}
+.tip{color:var(--dim);font-size:13.5px;text-align:center;flex:1;line-height:1.4}
+.pick{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.pick .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+.pick b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick small{display:block;color:var(--faint);font-size:11.5px}
+
+/* verdict */
+.verdict{flex:0 0 auto;background:var(--bg2);border-top:1px solid var(--line);padding:12px 14px 0}
+.verdict-in{max-width:680px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.vflag{width:46px;height:31px;border-radius:5px;object-fit:cover;border:1px solid rgba(255,255,255,.2);flex:0 0 auto;background:#fff;
+  cursor:zoom-in;transition:transform .12s ease}
+.vflag:hover{transform:scale(1.08)}
+.vtxt{flex:1;min-width:0}
+.vtxt .head{font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px}
+.vtxt .head.ok{color:var(--good)}
+.vtxt .head.no{color:var(--bad)}
+.vtxt b{font-size:16px;display:block;line-height:1.25}
+.vtxt small{color:var(--dim);font-size:12px;display:block;margin-top:2px;line-height:1.4}
+
+/* ---------- RESULTS ---------- */
+#results{overflow-y:auto;padding:22px 16px calc(22px + var(--safeb))}
+.res-inner{width:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.res-head{text-align:center;padding:8px 0}
+.res-head .big{font-size:56px;font-weight:800;line-height:1;letter-spacing:-.03em}
+.res-head .big span{color:var(--faint);font-size:26px;font-weight:700}
+.res-head .grade{margin-top:8px;font-size:19px;font-weight:700}
+.res-head .sub{color:var(--dim);font-size:13.5px;margin-top:6px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 10px;text-align:center}
+.stat b{display:block;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.stat small{color:var(--faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.review{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.rev{display:flex;align-items:center;gap:11px;padding:11px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
+.rev:last-child{border-bottom:none}
+.rev .mk{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;flex:0 0 auto}
+.rev .mk.ok{background:rgba(34,197,94,.16);color:var(--good)}
+.rev .mk.no{background:rgba(239,68,68,.16);color:var(--bad)}
+.rev img{width:30px;height:20px;object-fit:cover;border-radius:3px;flex:0 0 auto;border:1px solid rgba(255,255,255,.15);background:#fff}
+.rev .nm{flex:1;min-width:0}
+.rev .nm b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rev .nm small{color:var(--faint);font-size:11.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res-btns{display:flex;flex-direction:column;gap:10px}
+.res-btns .btn{flex:none}
+
+@media (min-width:860px) and (orientation:landscape){
+  .prompt{min-height:88px}
+  .qtext{font-size:18px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <section id="home" class="screen on">
+    <div class="home-inner">
+      <div class="brand">
+        <h1>World Genius</h1>
+        <p>Read the clue, study the flag, or name the capital, then find the country on the map.</p>
+      </div>
+
+      <div class="resume" id="resumeCard" hidden>
+        <div class="rz">
+          <b id="resumeTitle">Round in progress</b>
+          <small id="resumeSub"></small>
+        </div>
+        <button class="btn" id="resumeBtn">Resume</button>
+        <button class="icobtn" id="resumeDrop" aria-label="Discard the saved round" title="Discard">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
+      <div class="modes">
+        <button class="mode" data-mode="fact">
+          <span class="ico">&#128220;</span>
+          <span class="lbl">
+            <h2>Fact Mode</h2>
+            <span>A clue about what a country is known for.</span>
+          </span>
+          <span class="best" id="bestFact"></span>
+        </button>
+        <button class="mode flag" data-mode="flag">
+          <span class="ico">&#127937;</span>
+          <span class="lbl">
+            <h2>Flag Mode</h2>
+            <span>Identify the country from its flag alone.</span>
+          </span>
+          <span class="best" id="bestFlag"></span>
+        </button>
+        <button class="mode capital" data-mode="capital">
+          <span class="ico">&#127961;</span>
+          <span class="lbl">
+            <h2>Capital Mode</h2>
+            <span>Given a capital city, find its country.</span>
+          </span>
+          <span class="best" id="bestCapital"></span>
+        </button>
+      </div>
+
+      <div class="settings">
+        <div class="row">
+          <div class="lbl"><b>Questions per round</b></div>
+          <div class="seg" id="lenSeg" role="radiogroup" aria-label="Questions per round">
+            <button role="radio" data-len="5">5</button>
+            <button role="radio" data-len="10">10</button>
+            <button role="radio" data-len="20">20</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="lbl"><b>Region</b></div>
+          <div class="seg" id="regSeg" role="radiogroup" aria-label="Region">
+            <button role="radio" data-reg="all">World</button>
+            <button role="radio" data-reg="Africa">Africa</button>
+            <button role="radio" data-reg="Asia">Asia</button>
+            <button role="radio" data-reg="Europe">Europe</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="lbl"><b>Map style</b></div>
+          <div class="seg" id="styleSeg" role="radiogroup" aria-label="Map style">
+            <button role="radio" data-sat="0">Vector</button>
+            <button role="radio" data-sat="1">Satellite</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="lbl">
+            <b>Zoom sensitivity</b>
+            <small>Lower zooms finer per scroll or pinch.</small>
+          </div>
+          <div class="rng">
+            <input type="range" id="zoomRng" min="0.3" max="2.5" step="0.1" value="1" aria-label="Zoom sensitivity">
+            <span class="val" id="zoomVal">1.0&times;</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="lbl">
+            <b>Name assist</b>
+            <small>Show the country&rsquo;s name before you confirm. Off is the real challenge.</small>
+          </div>
+          <button class="sw" id="assistSw" role="switch" aria-checked="false" aria-label="Name assist"></button>
+        </div>
+      </div>
+
+      <p class="foot">197 countries &middot; 995 clues &middot; works offline<br>Borders: Natural Earth (public domain)</p>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="game" class="screen">
+    <div class="top">
+      <button class="icobtn" id="quitBtn" aria-label="Quit round" title="Quit round">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="prog">
+        <div class="meta"><span id="qNum">Question 1 of 10</span><span id="modeTag">Fact Mode</span></div>
+        <div class="bar"><i id="progBar"></i></div>
+      </div>
+      <div class="score"><span id="scoreVal">0</span><small>SCORE</small></div>
+    </div>
+
+    <div class="prompt" id="prompt"></div>
+
+    <div class="mapwrap">
+      <svg id="map" role="application" aria-label="World map. Select a country."></svg>
+      <div class="hint" id="hint"></div>
+      <div class="zoomctl">
+        <button id="zIn" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button id="zOut" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+        <button id="zReset" aria-label="Reset view" title="Reset view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V4h5M21 9V4h-5M3 15v5h5M21 15v5h-5"/></svg></button>
+        <button id="satBtn" aria-label="Toggle satellite view" aria-pressed="false" title="Satellite view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg></button>
+      </div>
+    </div>
+
+    <div id="verdict" class="verdict" hidden></div>
+    <div class="act"><div class="act-in" id="actIn"></div></div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="results" class="screen">
+    <div class="res-inner">
+      <div class="res-head">
+        <div class="big"><span id="rScore">0</span><span id="rOf">/10</span></div>
+        <div class="grade" id="rGrade"></div>
+        <div class="sub" id="rSub"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="rAcc">0%</b><small>Accuracy</small></div>
+        <div class="stat"><b id="rStreak">0</b><small>Best streak</small></div>
+        <div class="stat"><b id="rBest">0</b><small>Personal best</small></div>
+      </div>
+      <div class="review" id="rReview"></div>
+      <div class="res-btns">
+        <button class="btn" id="againBtn">Play again</button>
+        <button class="btn ghost" id="homeBtn" style="flex:none">Back to menu</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Flag lightbox -->
+  <div id="flagZoom" role="dialog" aria-modal="true" aria-label="Enlarged flag" hidden>
+    <img id="flagZoomImg" src="" alt="Enlarged flag">
+    <button class="close" id="flagZoomClose" aria-label="Close enlarged flag" title="Close">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+/* ===== Embedded data ===== */
+const MAP = /*__MAP__*/;
+const C   = /*__FACTS__*/;
+const FLAGS = /*__FLAGS__*/;
+const SAT   = /*__SAT__*/;
+
+const $ = id => document.getElementById(id);
+const MODE_LABEL = { fact:"Fact Mode", flag:"Flag Mode", capital:"Capital Mode" };
+const MODE_SHORT = { fact:"Fact", flag:"Flag", capital:"Capital" };
+const flagSrc = iso => "data:image/webp;base64," + FLAGS[iso];
+
+/* ===== Settings ===== */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("wg_"+k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k, v){ try{ localStorage.setItem("wg_"+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem("wg_"+k); }catch(e){} }
+};
+let settings = { len: store.get("len",10), reg: store.get("reg","all"), assist: store.get("assist",false), sat: store.get("sat",false),
+                 zoomSens: store.get("zoomSens",1) };
+// A bad or out-of-range stored value would make the map unzoomable, so pin it to the slider's range.
+settings.zoomSens = Math.min(2.5, Math.max(0.3, +settings.zoomSens || 1));
+let best = store.get("best", {});
+
+/* ===== Build map ===== */
+const svg = $("map");
+const SVGNS = "http://www.w3.org/2000/svg";
+const gTerr = document.createElementNS(SVGNS,"g");
+const gLand = document.createElementNS(SVGNS,"g");
+const gPins = document.createElementNS(SVGNS,"g");
+const paths = {}, pins = {}, areaOf = {};
+// Any country small enough to ever need a tap target gets a pin element; whether it is
+// actually shown is decided per-frame from its current on-screen size, because the same
+// country is comfortably tappable on a desktop and sub-pixel on a phone.
+const PIN_AREA = 16;      // below this projected area a country gets a pin element
+const PIN_PX   = 4.5;     // pin radius in screen px
+const COARSE   = matchMedia("(pointer: coarse)").matches;
+const PIN_HIDE = COARSE ? 10 : 6.5;   // px across, below which the pin is shown
+
+svg.setAttribute("viewBox", `0 0 ${MAP.W} ${MAP.H}`);
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+
+for(const t of MAP.territory){
+  const p = document.createElementNS(SVGNS,"path");
+  p.setAttribute("d", t.d); p.setAttribute("class","t");
+  gTerr.appendChild(p);
+}
+for(const c of MAP.playable){
+  const p = document.createElementNS(SVGNS,"path");
+  p.setAttribute("d", c.d);
+  p.setAttribute("class","c");
+  p.dataset.iso = c.iso;
+  paths[c.iso] = p;
+  areaOf[c.iso] = c.area;
+  gLand.appendChild(p);
+  if(c.area < PIN_AREA){
+    const ci = document.createElementNS(SVGNS,"circle");
+    ci.setAttribute("cx", c.cx); ci.setAttribute("cy", c.cy);
+    ci.setAttribute("class","pin");
+    ci.dataset.iso = c.iso;
+    pins[c.iso] = ci;
+    gPins.appendChild(ci);
+  }
+}
+/* ===== Satellite basemap =====
+   The map zooms to 26x. A single baked image sharp enough for that would be tens of gigapixels,
+   so the imagery ships as a pyramid: a whole-world base plus two tiled levels (see build_sat.py).
+   Only the tiles overlapping the viewport are ever attached to the DOM, and only at the finest
+   level whose visible tile count fits TILE_BUDGET, so the number of decoded pixels stays roughly
+   constant however far in the map is zoomed. The base sits underneath and is never removed, so
+   there is always something to show while a detail tile decodes. */
+const TILE_BUDGET = 20;
+const SAT_LEVELS = SAT.levels.map(L => ({
+  tiles: L.tiles,
+  cols: L.cols, rows: L.rows,
+  cw: MAP.W/L.cols, ch: MAP.H/L.rows,                 // map units covered by one tile
+  bx: L.bleed*(MAP.W/L.cols)/L.tw,                    // that tile's bleed, in map units
+  by: L.bleed*(MAP.H/L.rows)/L.th
+}));
+
+const satLayer = document.createElementNS(SVGNS,"g");
+satLayer.setAttribute("id","satLayer");
+const satBase = document.createElementNS(SVGNS,"image");
+satBase.setAttribute("x","0"); satBase.setAttribute("y","0");
+satBase.setAttribute("width", MAP.W); satBase.setAttribute("height", MAP.H);
+satBase.setAttribute("preserveAspectRatio","none");
+// One group per level, in level order, so a coarse tile can never paint over a finer one
+// while the two are briefly on screen together during a change of level.
+const satTileG = SAT_LEVELS.map(()=>document.createElementNS(SVGNS,"g"));
+satLayer.append(satBase, ...satTileG);
+svg.append(satLayer, gTerr, gLand, gPins);
+
+const satTiles = new Map();        // "level:col,row" -> <image>
+let satBaseOn = false, satTimer = 0, satResweep = false;
+
+function satTileRange(L){
+  return {
+    c0: Math.max(0, Math.floor(VB.x/L.cw)),
+    c1: Math.min(L.cols-1, Math.floor((VB.x+VB.w-1e-6)/L.cw)),
+    r0: Math.max(0, Math.floor(VB.y/L.ch)),
+    r1: Math.min(L.rows-1, Math.floor((VB.y+VB.h-1e-6)/L.ch))
+  };
+}
+
+function satUpdate(){
+  satTimer = 0; satResweep = false;
+  if(!settings.sat){
+    satTiles.forEach(el => el.remove()); satTiles.clear();
+    return;
+  }
+  if(!satBaseOn){ satBaseOn = true; satBase.setAttribute("href","data:image/webp;base64,"+SAT.base); }
+
+  // finest level we can afford for the current viewBox; -1 means the base alone will do
+  let pick = -1, rng = null;
+  for(let i=SAT_LEVELS.length-1; i>=0; i--){
+    const r = satTileRange(SAT_LEVELS[i]);
+    if((r.c1-r.c0+1)*(r.r1-r.r0+1) <= TILE_BUDGET){ pick = i; rng = r; break; }
+  }
+
+  const want = new Set();
+  if(pick >= 0){
+    const L = SAT_LEVELS[pick];
+    for(let r=rng.r0; r<=rng.r1; r++) for(let c=rng.c0; c<=rng.c1; c++){
+      const key = pick+":"+c+","+r;
+      want.add(key);
+      if(satTiles.has(key)) continue;
+      const b64 = L.tiles[c+","+r];
+      if(!b64) continue;
+      const im = document.createElementNS(SVGNS,"image");
+      // Tiles are baked with a few pixels of bleed on every side, so neighbours overlap and
+      // no seam can open up between them at any zoom.
+      im.setAttribute("x", c*L.cw - L.bx);       im.setAttribute("y", r*L.ch - L.by);
+      im.setAttribute("width", L.cw + 2*L.bx);   im.setAttribute("height", L.ch + 2*L.by);
+      im.setAttribute("preserveAspectRatio","none");
+      im.setAttribute("class","tile");
+      const done = ()=>{ im.classList.add("on"); if(satResweep) satUpdate(); };
+      im.addEventListener("load", done, {once:true});
+      im.addEventListener("error", done, {once:true});
+      im.setAttribute("href","data:image/webp;base64,"+b64);
+      satTileG[pick].appendChild(im);
+      satTiles.set(key, im);
+    }
+  }
+
+  // Hold on to superseded tiles until their replacements have decoded. Dropping them straight
+  // away would flash the blurry base every time the level changes. Only the ones still on
+  // screen are worth holding: anything the view has left behind goes immediately, which keeps
+  // a change of level from briefly doubling the number of decoded tiles.
+  const stale = [];
+  for(const [key, el] of satTiles){
+    if(want.has(key)) continue;
+    const [lv, cr] = key.split(":");
+    const [c, r] = cr.split(",").map(Number);
+    const L = SAT_LEVELS[+lv], x0 = c*L.cw, y0 = r*L.ch;
+    if(x0 < VB.x+VB.w && x0+L.cw > VB.x && y0 < VB.y+VB.h && y0+L.ch > VB.y) stale.push([key, el]);
+    else { el.remove(); satTiles.delete(key); }
+  }
+  if(!stale.length) return;
+  for(const key of want){
+    const el = satTiles.get(key);
+    if(el && !el.classList.contains("on")){ satResweep = true; return; }
+  }
+  for(const [key, el] of stale){ el.remove(); satTiles.delete(key); }
+}
+
+// Coalesce updates while the view is still moving, so a pinch or a flyTo does not decode tiles
+// it is about to scroll straight past.
+function satSchedule(){
+  if(!settings.sat && !satTiles.size) return;
+  if(satTimer) clearTimeout(satTimer);
+  satTimer = setTimeout(satUpdate, 80);
+}
+
+function applySat(){
+  svg.classList.toggle("sat", !!settings.sat);
+  const b = $("satBtn");
+  if(b){ b.setAttribute("aria-pressed", String(!!settings.sat)); b.title = settings.sat ? "Vector view" : "Satellite view"; }
+  if(satTimer){ clearTimeout(satTimer); satTimer = 0; }
+  satUpdate();
+}
+
+/* ===== Pan & zoom ===== */
+const VB = { x:0, y:0, w:MAP.W, h:MAP.H };
+const MAXZ = 26;
+let flyRAF = 0;
+let FIT = { x:0, y:0, w:MAP.W, h:MAP.H };
+
+// The viewBox is kept at the container's aspect ratio. Otherwise a portrait phone
+// letterboxes the 2.25:1 map into a strip and never fills the screen, even zoomed in.
+function containerAR(){
+  const r = svg.getBoundingClientRect();
+  return (r.width||1)/(r.height||1);
+}
+let sizeRetry = 0;
+function computeFit(){
+  const r = svg.getBoundingClientRect();
+  // A hidden tab or a not-yet-laid-out pane reports 0x0; fitting to that would bake in a
+  // bogus square viewBox. Keep the last good fit and retry once the element has a real size.
+  if(r.width < 2 || r.height < 2){
+    if(sizeRetry < 90){ sizeRetry++; requestAnimationFrame(()=>{ computeFit(); clampVB(); applyVB(); }); }
+    return FIT;
+  }
+  sizeRetry = 0;
+  const ar = r.width/r.height;
+  const w = Math.max(MAP.W, MAP.H*ar);
+  const h = w/ar;
+  FIT = { x:(MAP.W-w)/2, y:(MAP.H-h)/2, w, h };
+  return FIT;
+}
+function applyVB(){
+  svg.setAttribute("viewBox", `${VB.x} ${VB.y} ${VB.w} ${VB.h}`);
+  const r = svg.getBoundingClientRect();
+  // user-units per screen px along the fitted axis
+  const upp = Math.max(VB.w / Math.max(r.width,1), VB.h / Math.max(r.height,1));
+  const pr = PIN_PX * upp;
+  const pxPerUser = 1/upp;
+  for(const k in pins){
+    const el = pins[k];
+    // once the real polygon is big enough to tap, retire its pin
+    const onscreen = Math.sqrt(areaOf[k]) * pxPerUser;
+    if(onscreen > PIN_HIDE){ el.style.display="none"; }
+    else { el.style.display=""; el.setAttribute("r", pr); }
+  }
+  satSchedule();
+}
+function clampVB(){
+  const ar = containerAR();
+  VB.w = Math.min(FIT.w, Math.max(MAP.W/MAXZ, VB.w));
+  VB.h = VB.w/ar;
+  const axis = (v, size, span) => {
+    if(span >= size) return (size-span)/2;      // whole map fits: centre it
+    const m = span*0.22;                         // a little overscroll at the edges
+    return Math.min(Math.max(v, -m), size-span+m);
+  };
+  VB.x = axis(VB.x, MAP.W, VB.w);
+  VB.y = axis(VB.y, MAP.H, VB.h);
+}
+function toUser(cx, cy){
+  const r = svg.getBoundingClientRect();
+  if(!r.width || !r.height) return {x:VB.x, y:VB.y};
+  const s = Math.min(r.width/VB.w, r.height/VB.h);          // meet fit
+  const ox = r.left + (r.width  - VB.w*s)/2;
+  const oy = r.top  + (r.height - VB.h*s)/2;
+  return { x: VB.x + (cx-ox)/s, y: VB.y + (cy-oy)/s };
+}
+function zoomAt(factor, cx, cy){
+  const p = toUser(cx, cy);
+  const rx = (p.x - VB.x)/VB.w, ry = (p.y - VB.y)/VB.h;
+  const before = VB.w;
+  VB.w = VB.w/factor; VB.h = VB.h/factor;
+  clampVB();
+  const eff = before/VB.w;
+  if(Math.abs(eff-1) < 1e-6) return;
+  VB.x = p.x - rx*VB.w; VB.y = p.y - ry*VB.h;
+  clampVB(); applyVB();
+}
+function resetView(){ cancelAnimationFrame(flyRAF); computeFit(); Object.assign(VB, FIT); clampVB(); applyVB(); }
+function refit(){
+  const cx = VB.x+VB.w/2, cy = VB.y+VB.h/2;
+  const prev = FIT.w;
+  computeFit();
+  if(prev>0) VB.w = VB.w * (FIT.w/prev);        // keep the same zoom level across resizes
+  VB.h = VB.w/containerAR();
+  VB.x = cx-VB.w/2; VB.y = cy-VB.h/2;
+  clampVB(); applyVB();
+}
+
+function flyTo(x,y,w,h,ms=520){
+  cancelAnimationFrame(flyRAF);
+  const from={...VB};
+  const to={x,y,w,h};
+  // clamp target
+  const sav={...VB}; Object.assign(VB,to); clampVB(); Object.assign(to,VB); Object.assign(VB,sav);
+  const t0=performance.now();
+  const step=t=>{
+    const k=Math.min(1,(t-t0)/ms), e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+    VB.x=from.x+(to.x-from.x)*e; VB.y=from.y+(to.y-from.y)*e;
+    VB.w=from.w+(to.w-from.w)*e; VB.h=from.h+(to.h-from.h)*e;
+    applyVB();
+    if(k<1) flyRAF=requestAnimationFrame(step);
+  };
+  flyRAF=requestAnimationFrame(step);
+}
+function frameISOs(isos, pad=2.6, minW=MAP.W/16){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9, found=false;
+  for(const iso of isos){
+    const p=paths[iso]; if(!p) continue;
+    let b; try{ b=p.getBBox(); }catch(e){ continue; }
+    if(!b || (!b.width && !b.height)){
+      const c=MAP.playable.find(z=>z.iso===iso);
+      if(c) b={x:c.cx-3,y:c.cy-3,width:6,height:6}; else continue;
+    }
+    x0=Math.min(x0,b.x); y0=Math.min(y0,b.y);
+    x1=Math.max(x1,b.x+b.width); y1=Math.max(y1,b.y+b.height); found=true;
+  }
+  if(!found) return null;
+  let cx=(x0+x1)/2, cy=(y0+y1)/2;
+  let w=Math.max((x1-x0)*pad, minW);
+  const ar=VB.w/VB.h;
+  let h=Math.max((y1-y0)*pad, w/ar);
+  w=Math.max(w, h*ar);
+  return {x:cx-w/2, y:cy-h/2, w, h};
+}
+
+/* pointer interaction: drag to pan, pinch to zoom, tap to select */
+const ptrs = new Map();
+let dragging=false, moved=0, pinchDist=0, downT=0;
+// A pointerup can be lost (interrupting system gesture, tab switch, capture stolen).
+// Without pruning, one orphaned id makes every later tap look like a second finger
+// and the map stops responding until reload.
+function clearPtrs(){ ptrs.clear(); dragging=false; pinchDist=0; svg.classList.remove("grabbing"); }
+function prunePtrs(){
+  const now=Date.now();
+  for(const [id,p] of ptrs) if(now-p.t > 5000) ptrs.delete(id);
+  if(!ptrs.size){ dragging=false; pinchDist=0; }
+}
+svg.addEventListener("pointerdown", e=>{
+  prunePtrs();
+  ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY, t:Date.now()});
+  if(ptrs.size===1){ dragging=true; moved=0; downT=Date.now(); svg.classList.add("grabbing"); }
+  if(ptrs.size===2){
+    const [a,b]=[...ptrs.values()];
+    pinchDist=Math.hypot(a.x-b.x,a.y-b.y);
+    dragging=false;
+  }
+  try{ svg.setPointerCapture(e.pointerId); }catch(err){}
+});
+svg.addEventListener("pointermove", e=>{
+  const prev = ptrs.get(e.pointerId);
+  if(!prev) return;
+  const nx=e.clientX, ny=e.clientY;
+  if(ptrs.size===2){
+    const other=[...ptrs.entries()].find(([id])=>id!==e.pointerId);
+    ptrs.set(e.pointerId,{x:nx,y:ny,t:Date.now()});
+    if(other){
+      const o=other[1];
+      const d=Math.hypot(nx-o.x, ny-o.y);
+      if(pinchDist>0 && d>0){
+        const f=Math.pow(d/pinchDist, settings.zoomSens);
+        if(Math.abs(f-1)>0.005) zoomAt(f,(nx+o.x)/2,(ny+o.y)/2);
+      }
+      pinchDist=d; moved=99;
+    }
+    return;
+  }
+  if(!dragging) return;
+  const dx=nx-prev.x, dy=ny-prev.y;
+  moved+=Math.hypot(dx,dy);
+  const r=svg.getBoundingClientRect();
+  const s=Math.min(r.width/VB.w, r.height/VB.h) || 1;
+  VB.x-=dx/s; VB.y-=dy/s; clampVB(); applyVB();
+  ptrs.set(e.pointerId,{x:nx,y:ny,t:Date.now()});
+});
+function endPtr(e){
+  const wasTap = ptrs.size===1 && moved<9 && (Date.now()-downT)<900;
+  ptrs.delete(e.pointerId);
+  if(ptrs.size<2) pinchDist=0;
+  if(ptrs.size===0){ dragging=false; svg.classList.remove("grabbing"); }
+  if(wasTap) handleTap(e.clientX, e.clientY);
+}
+svg.addEventListener("pointerup", endPtr);
+const dropPtr = e=>{ ptrs.delete(e.pointerId); if(ptrs.size===0) clearPtrs(); if(ptrs.size<2) pinchDist=0; };
+svg.addEventListener("pointercancel", dropPtr);
+svg.addEventListener("lostpointercapture", dropPtr);
+addEventListener("blur", clearPtrs);
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden) clearPtrs();
+  else if($("game").classList.contains("on")) refit();   // sizes are unreliable while hidden
+});
+svg.addEventListener("wheel", e=>{
+  e.preventDefault();
+  zoomAt(Math.exp(-e.deltaY*(e.deltaMode===1?0.03:0.0016)*settings.zoomSens), e.clientX, e.clientY);
+}, {passive:false});
+svg.addEventListener("dblclick", e=>{ e.preventDefault(); zoomAt(1.8, e.clientX, e.clientY); });
+svg.addEventListener("contextmenu", e=>e.preventDefault());
+
+$("zIn").onclick = ()=>{ const r=svg.getBoundingClientRect(); zoomAt(1.6, r.left+r.width/2, r.top+r.height/2); };
+$("zOut").onclick= ()=>{ const r=svg.getBoundingClientRect(); zoomAt(1/1.6, r.left+r.width/2, r.top+r.height/2); };
+$("zReset").onclick = resetView;
+$("satBtn").onclick = ()=>{
+  settings.sat = !settings.sat; store.set("sat", settings.sat);
+  applySat(); paintSettings();
+  showHint(settings.sat ? "Satellite view" : "Vector view");
+};
+addEventListener("resize", refit);
+if(window.visualViewport) visualViewport.addEventListener("resize", refit);
+addEventListener("orientationchange", ()=>setTimeout(refit,120));
+
+/* Tap resolution: hit the element, and if we miss, fall back to the nearest pin */
+function nearestPin(cx, cy, limPx){
+  const p = toUser(cx, cy);
+  const r = svg.getBoundingClientRect();
+  const s = Math.min(r.width/VB.w, r.height/VB.h) || 1;
+  const lim = limPx/s;
+  let bd=Infinity, bi=null;
+  for(const k in pins){
+    if(pins[k].style.display==="none") continue;
+    const d = Math.hypot(+pins[k].getAttribute("cx")-p.x, +pins[k].getAttribute("cy")-p.y);
+    if(d<bd){ bd=d; bi=k; }
+  }
+  return (bi && bd<lim) ? bi : null;
+}
+function handleTap(cx, cy){
+  if(state.phase!=="answering") return;
+  const el = document.elementFromPoint(cx, cy);
+  let iso = el && el.dataset ? el.dataset.iso : null;
+  const onPin = !!(el && el.tagName === "circle");
+  // Pins for neighbouring microstates overlap when zoomed out, and paint order would
+  // otherwise decide the winner. Resolve by nearest centre instead, so the closest dot wins.
+  if(onPin){
+    const n = nearestPin(cx, cy, PIN_PX*2.4);
+    if(n) iso = n;
+  }else if(!iso){
+    const n = nearestPin(cx, cy, 16);   // forgiving miss radius for touch screens
+    if(n) iso = n;
+  }
+  if(iso && C[iso]) select(iso);
+}
+
+/* ===== Game state ===== */
+const ALL_ISO = MAP.playable.map(c=>c.iso).filter(i=>C[i]);
+const state = { mode:"fact", reg:"all", queue:[], i:0, score:0, streak:0, bestStreak:0, sel:null, log:[], phase:"idle", clue:0 };
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function pool(){
+  const p = settings.reg==="all" ? ALL_ISO.slice() : ALL_ISO.filter(i=>C[i].r===settings.reg);
+  return p.length ? p : ALL_ISO.slice();
+}
+
+/* ===== Clue rotation =====
+   A country comes up again and again across a sitting, and drawing its clue at random every
+   time repeated clues almost immediately: with ten clues, two of the first five sightings of a
+   country collide more often than not. `seen` records which clue indices a country has already
+   spent this session, and a clue is only reachable again once every other clue for that country
+   has been used. Kept per country, not as one global list, so working through Iceland's ten
+   must not shorten anyone else's rotation.
+   When a country does run out, the cycle restarts carrying its last clue forward as already
+   spent, which stops the wrap-around from showing the same clue twice in a row. */
+const seen = {};
+function pickClue(iso){
+  const n = C[iso].f.length;
+  if(!n) return 0;
+  let used = seen[iso] || (seen[iso] = []);
+  if(used.length >= n) used = seen[iso] = n>1 ? [used[used.length-1]] : [];
+  const free = [];
+  for(let i=0;i<n;i++) if(used.indexOf(i)<0) free.push(i);
+  const clue = free[Math.floor(Math.random()*free.length)];
+  used.push(clue);
+  return clue;
+}
+
+/* A stored rotation is cosmetic: the worst a bad one can do is repeat a clue, never misscore a
+   round. So unlike the round itself it is repaired rather than rejected, entry by entry. */
+function cleanSeen(x){
+  const out = {};
+  if(!x || typeof x!=="object") return out;
+  for(const iso in x){
+    if(!C[iso] || !Array.isArray(x[iso])) continue;
+    const n = C[iso].f.length, keep = [];
+    for(const i of x[iso]) if(Number.isInteger(i) && i>=0 && i<n && keep.indexOf(i)<0) keep.push(i);
+    if(keep.length) out[iso] = keep;
+  }
+  return out;
+}
+
+/* ===== Saving an unfinished round =====
+   Written on every tap and every answer so a reload, a crash or a closed tab can pick the
+   round back up. Only whole rounds count towards a personal best, so this is the one thing
+   that would otherwise be lost. Bumped if the shape below ever changes. */
+const ROUND_V = 2;
+function saveRound(){
+  if(state.phase==="idle") return;
+  store.set("round", { v:ROUND_V, mode:state.mode, reg:state.reg, queue:state.queue, i:state.i,
+    score:state.score, streak:state.streak, bestStreak:state.bestStreak, sel:state.sel,
+    log:state.log, phase:state.phase, clue:state.clue, seen:seen });
+}
+function dropRound(){ store.del("round"); paintResume(); }
+
+/* Anything that fails a check here is treated as no saved round at all. The stored copy can
+   be from an older build, hand-edited, or half-written, and a round restored into an
+   inconsistent state would score wrongly rather than fail visibly. */
+function loadRound(){
+  const r = store.get("round", null);
+  if(!r || r.v!==ROUND_V || !MODE_LABEL[r.mode]) return null;
+  if(r.phase!=="answering" && r.phase!=="revealed") return null;
+  if(!Array.isArray(r.queue) || !r.queue.length || !r.queue.every(i=>C[i])) return null;
+  if(!Number.isInteger(r.i) || r.i<0 || r.i>=r.queue.length) return null;
+  if(![r.score,r.streak,r.bestStreak].every(n=>Number.isInteger(n) && n>=0)) return null;
+  if(!Array.isArray(r.log) || !r.log.every(e=>e && C[e.ans] && C[e.pick])) return null;
+  // One log entry per question already answered, or the score and the screen disagree.
+  if(r.log.length !== r.i + (r.phase==="revealed"?1:0)) return null;
+  if(r.phase==="revealed" && r.log[r.i].ans !== r.queue[r.i]) return null;
+  if(r.log.filter(e=>e.ok).length !== r.score) return null;
+  return r;
+}
+
+function startRound(mode){
+  state.mode=mode; state.reg=settings.reg; state.i=0; state.score=0; state.streak=0; state.bestStreak=0; state.log=[];
+  const p = shuffle(pool());
+  const n = Math.min(settings.len, p.length);
+  state.queue = p.slice(0,n);
+  show("game");
+  resetView();
+  nextQuestion();
+}
+
+function resumeRound(){
+  const r = loadRound();
+  if(!r){ dropRound(); return; }
+  state.mode=r.mode; state.reg=typeof r.reg==="string"?r.reg:"all";
+  state.queue=r.queue; state.i=r.i; state.score=r.score;
+  state.streak=r.streak; state.bestStreak=r.bestStreak; state.log=r.log; state.clue=r.clue|0;
+  for(const k in seen) delete seen[k];
+  Object.assign(seen, cleanSeen(r.seen));
+  show("game");
+  resetView();
+  nextQuestion(true);
+  if(r.phase==="revealed"){
+    const e = r.log[r.i];
+    state.phase="revealed"; state.sel=e.pick;
+    paintReveal(e.ans, e.pick, e.ok);
+    const box = frameISOs(e.ok?[e.ans]:[e.ans,e.pick]);
+    if(box) flyTo(box.x,box.y,box.w,box.h);
+  }else if(r.sel && C[r.sel]){
+    select(r.sel);
+  }
+  showHint("Picked up where you left off");
+}
+
+// `resuming` re-renders the question already in progress: same clue, no fresh hint.
+function nextQuestion(resuming){
+  state.sel=null; state.phase="answering";
+  svg.classList.remove("locked");
+  for(const k in paths) paths[k].classList.remove("sel","right","wrong");
+  for(const k in pins)  pins[k].classList.remove("sel","right","wrong");
+  $("verdict").hidden = true;
+
+  const iso = state.queue[state.i];
+  const c = C[iso];
+  $("qNum").textContent = `Question ${state.i+1} of ${state.queue.length}`;
+  $("modeTag").textContent = MODE_LABEL[state.mode];
+  $("scoreVal").textContent = state.score;
+  $("progBar").style.width = (state.i/state.queue.length*100)+"%";
+
+  if(state.mode==="fact"){
+    if(!resuming) state.clue = pickClue(iso);
+    const f = c.f[state.clue] || c.f[0];
+    $("prompt").innerHTML = `<p class="qtext">${f}</p>`;
+  }else if(state.mode==="capital"){
+    $("prompt").innerHTML =
+      `<div class="capbox"><div class="city"><em>${c.cap}</em></div><span>Which country&rsquo;s capital is this?</span></div>`;
+  }else{
+    $("prompt").innerHTML =
+      `<div class="flagbox"><img id="promptFlag" src="${flagSrc(iso)}" alt="Flag of the country to guess" title="Tap to enlarge"><span>Which country flies this flag? Tap it to enlarge.</span></div>`;
+  }
+  renderAct();
+  if(!resuming){
+    saveRound();
+    showHint(state.i===0
+      ? "Drag to pan &middot; pinch or scroll to zoom &middot; tap a country"
+      : "Tap the country you think it is");
+  }
+}
+
+let hintT=0;
+function showHint(html){
+  const h=$("hint"); h.innerHTML=html; h.classList.remove("hide");
+  clearTimeout(hintT); hintT=setTimeout(()=>h.classList.add("hide"), 3400);
+}
+
+function select(iso){
+  if(state.sel){
+    const old=state.sel;
+    paths[old]&&paths[old].classList.remove("sel");
+    pins[old]&&pins[old].classList.remove("sel");
+  }
+  state.sel=iso;
+  paths[iso]&&paths[iso].classList.add("sel");
+  pins[iso]&&pins[iso].classList.add("sel");
+  renderAct();
+  saveRound();
+}
+
+function renderAct(){
+  const el=$("actIn");
+  if(state.phase==="answering"){
+    if(!state.sel){
+      el.innerHTML = `<span class="tip">Tap a country on the map to make your guess</span>`;
+    }else if(settings.assist){
+      el.innerHTML =
+        `<span class="pick"><span class="dot"></span><span style="min-width:0"><b>${C[state.sel].n}</b><small>Tap another country to change</small></span></span>
+         <button class="btn" id="confirmBtn" style="flex:0 0 auto">Confirm</button>`;
+      $("confirmBtn").onclick=confirmPick;
+    }else{
+      el.innerHTML =
+        `<span class="pick"><span class="dot"></span><span style="min-width:0"><b>Country selected</b><small>Highlighted in blue. Tap elsewhere to change</small></span></span>
+         <button class="btn" id="confirmBtn" style="flex:0 0 auto">Confirm</button>`;
+      $("confirmBtn").onclick=confirmPick;
+    }
+  }else{
+    const last = state.i+1>=state.queue.length;
+    el.innerHTML = `<button class="btn" id="nextBtn">${last?"See results":"Next question"}</button>`;
+    $("nextBtn").onclick = ()=>{
+      if(last){ finish(); }
+      else{ state.i++; resetView(); nextQuestion(); }
+    };
+  }
+}
+
+function confirmPick(){
+  if(!state.sel || state.phase!=="answering") return;
+  const ans = state.queue[state.i], pick = state.sel;
+  const ok = ans===pick;
+  state.phase="revealed";
+
+  if(ok){
+    state.score++; state.streak++;
+    state.bestStreak=Math.max(state.bestStreak,state.streak);
+  }else{
+    state.streak=0;
+  }
+  state.log.push({ans,pick,ok});
+  paintReveal(ans,pick,ok);
+  saveRound();
+
+  const box = frameISOs(ok?[ans]:[ans,pick]);
+  if(box) flyTo(box.x,box.y,box.w,box.h);
+  showHint(ok ? "Nice one" : "Green is the answer, red was your pick");
+}
+
+// Split out of confirmPick so a resumed round can put an already-answered question back on
+// screen exactly as it was left.
+function paintReveal(ans,pick,ok){
+  svg.classList.add("locked");
+  paths[pick]&&paths[pick].classList.remove("sel");
+  pins[pick]&&pins[pick].classList.remove("sel");
+  if(!ok){
+    paths[pick]&&paths[pick].classList.add("wrong");
+    pins[pick]&&pins[pick].classList.add("wrong");
+  }
+  paths[ans]&&paths[ans].classList.add("right");
+  pins[ans]&&pins[ans].classList.add("right");
+
+  $("scoreVal").textContent = state.score;
+  $("progBar").style.width = ((state.i+1)/state.queue.length*100)+"%";
+
+  const a=C[ans];
+  const v=$("verdict");
+  v.hidden=false;
+  v.innerHTML =
+    `<div class="verdict-in">
+       <img class="vflag" src="${flagSrc(ans)}" alt="Flag of ${a.n}" title="Tap to enlarge">
+       <div class="vtxt">
+         <div class="head ${ok?'ok':'no'}">${ok?"Correct":"Not quite"}</div>
+         <b>${a.n}</b>
+         <small>Capital: ${a.cap} &middot; ${a.r}${ok?"":` &middot; you picked ${C[pick].n}`}${a.capNote?`<br><span style="color:var(--faint)">${a.capNote}</span>`:""}</small>
+       </div>
+     </div>`;
+
+  renderAct();
+}
+
+function finish(){
+  const n=state.queue.length, s=state.score;
+  const key = state.mode+"_"+n+"_"+state.reg;
+  const prev = best[key]||0;
+  if(s>prev){ best[key]=s; store.set("best",best); }
+  state.phase="idle";
+  dropRound();
+  const pct = Math.round(s/n*100);
+  $("rScore").textContent=s; $("rOf").textContent="/"+n;
+  $("rAcc").textContent=pct+"%";
+  $("rStreak").textContent=state.bestStreak;
+  $("rBest").textContent=(best[key]||0)+"/"+n;
+  const grades=[[90,"World Genius &#127942;"],[75,"Globetrotter &#9992;"],[55,"Solid navigator &#129517;"],[35,"Getting your bearings &#128506;"],[0,"Room to explore &#127760;"]];
+  $("rGrade").innerHTML = grades.find(g=>pct>=g[0])[1];
+  $("rSub").textContent = s>prev && s>0 ? "New personal best for this setup!" : `${MODE_SHORT[state.mode]} Mode · ${state.reg==="all"?"World":state.reg}`;
+  $("rReview").innerHTML = state.log.map(r=>{
+    const a=C[r.ans];
+    return `<div class="rev">
+      <span class="mk ${r.ok?'ok':'no'}">${r.ok?'&#10003;':'&#10007;'}</span>
+      <img src="${flagSrc(r.ans)}" alt="">
+      <span class="nm"><b>${a.n}</b><small>${r.ok?'Correct':'You picked '+C[r.pick].n}</small></span>
+    </div>`;
+  }).join("");
+  show("results");
+}
+
+/* ===== Screens & menu ===== */
+function show(id){
+  for(const s of document.querySelectorAll(".screen")) s.classList.toggle("on", s.id===id);
+  if(id==="game") requestAnimationFrame(()=>{ computeFit(); clampVB(); applyVB(); });
+  if(id==="results") $("results").scrollTop=0;
+}
+function paintResume(){
+  const card = $("resumeCard"), r = loadRound();
+  if(!r){ card.classList.remove("on"); card.hidden = true; return; }
+  const n = r.queue.length;
+  $("resumeTitle").textContent = MODE_LABEL[r.mode]+" in progress";
+  $("resumeSub").textContent =
+    `Question ${Math.min(r.i+1,n)} of ${n} · Score ${r.score} · ${r.reg==="all"?"World":r.reg}`;
+  card.hidden = false; card.classList.add("on");
+}
+function paintBest(){
+  const k = m => m+"_"+settings.len+"_"+settings.reg;
+  for(const [m,el] of [["fact",$("bestFact")],["flag",$("bestFlag")],["capital",$("bestCapital")]]){
+    const b=best[k(m)];
+    el.innerHTML = b===undefined ? "" : `${b}/${settings.len}<small>best</small>`;
+  }
+}
+function paintSettings(){
+  for(const b of $("lenSeg").children) b.setAttribute("aria-checked", String(+b.dataset.len===settings.len));
+  for(const b of $("regSeg").children) b.setAttribute("aria-checked", String(b.dataset.reg===settings.reg));
+  $("assistSw").setAttribute("aria-checked", String(settings.assist));
+  for(const b of $("styleSeg").children) b.setAttribute("aria-checked", String((b.dataset.sat==="1")===!!settings.sat));
+  const zr=$("zoomRng");
+  zr.value = settings.zoomSens;
+  zr.style.setProperty("--fill", ((settings.zoomSens-0.3)/2.2*100).toFixed(1)+"%");
+  $("zoomVal").textContent = settings.zoomSens.toFixed(1)+"\u00d7";
+  paintBest();
+}
+$("lenSeg").onclick = e=>{ const b=e.target.closest("button"); if(!b)return; settings.len=+b.dataset.len; store.set("len",settings.len); paintSettings(); };
+$("regSeg").onclick = e=>{ const b=e.target.closest("button"); if(!b)return; settings.reg=b.dataset.reg; store.set("reg",settings.reg); paintSettings(); };
+$("styleSeg").onclick = e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  settings.sat = b.dataset.sat==="1"; store.set("sat", settings.sat);
+  applySat(); paintSettings();
+};
+$("zoomRng").oninput = e=>{ settings.zoomSens=+e.target.value; store.set("zoomSens",settings.zoomSens); paintSettings(); };
+$("assistSw").onclick = ()=>{ settings.assist=!settings.assist; store.set("assist",settings.assist); paintSettings(); if(state.phase==="answering") renderAct(); };
+for(const b of document.querySelectorAll(".mode")) b.onclick = ()=>startRound(b.dataset.mode);
+function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); }
+$("quitBtn").onclick = goHome;
+$("resumeBtn").onclick = resumeRound;
+$("resumeDrop").onclick = dropRound;
+$("againBtn").onclick = ()=>startRound(state.mode);
+$("homeBtn").onclick = goHome;
+/* Flag lightbox: tap the prompt flag, or the answer flag after any question, to see it
+   big; tap anywhere (or Esc) to dismiss. */
+const flagZoom = $("flagZoom");
+function openFlagZoom(img){
+  const big = $("flagZoomImg");
+  big.src = img.src; big.alt = img.alt || "Enlarged flag";
+  flagZoom.hidden = false; flagZoom.classList.add("on");
+  $("flagZoomClose").focus();
+}
+function closeFlagZoom(){
+  flagZoom.classList.remove("on"); flagZoom.hidden = true;
+  $("flagZoomImg").src = ""; $("flagZoomImg").alt = "Enlarged flag";
+}
+const flagZoomOpen = ()=> flagZoom.classList.contains("on");
+$("prompt").addEventListener("click", e=>{
+  const img = e.target.closest("#promptFlag");
+  if(img) openFlagZoom(img);
+});
+$("verdict").addEventListener("click", e=>{
+  const img = e.target.closest(".vflag");
+  if(img) openFlagZoom(img);
+});
+flagZoom.onclick = closeFlagZoom;
+
+addEventListener("keydown", e=>{
+  if(e.key==="Escape"){
+    if(flagZoomOpen()){ e.preventDefault(); closeFlagZoom(); return; }
+    if($("game").classList.contains("on")) goHome();
+  }
+  if(e.key==="Enter"){
+    if(flagZoomOpen()){ e.preventDefault(); closeFlagZoom(); return; }
+    const c=$("confirmBtn")||$("nextBtn");
+    if(c && $("game").classList.contains("on")){ e.preventDefault(); c.click(); }
+  }
+});
+
+applySat();
+paintSettings();
+paintResume();
+resetView();
+</script>
+</body>
+</html>

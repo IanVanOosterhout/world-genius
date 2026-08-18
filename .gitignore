@@ -1,0 +1,15 @@
+# The built app. It lives on the gh-pages branch, one commit deep, and never in this
+# history: 9.6 MB of already-compressed image data cannot be delta'd, so every commit
+# of it would add a fresh 9.6 MB to the repository permanently. Use ./deploy.sh.
+index.html
+
+# 28 MB NASA source image. Public domain and re-downloadable, URL in README.md.
+build/bluemarble_21600.jpg
+
+# 6.9 MB tile pyramid, regenerated from the above by build_sat.py.
+build/sat/
+
+# Working notes, kept local.
+World_Genius_Session_Log.md
+
+.DS_Store
