@@ -109,6 +109,13 @@ those inputs change:
 
 - `node build/build_map.js` simplifies and projects the Natural Earth borders in
   `world50.geojson` into `map_data.json`. Run it if the borders or the projection change.
+- `python3 build/build_flags.py` fetches all 197 flags from [flagcdn.com](https://flagcdn.com)
+  at 1280 px wide and writes them to `flags/` as lossless WebP. Needs `Pillow` and a network
+  connection. `--audit` re-checks the flags already on disk without fetching anything: that every
+  playable country has one, that each decodes, that none is a single flat colour, that none is
+  under-resolution, and that no two are pixel-identical, which is how a wrong country's flag
+  would show up. The country list comes from `map_data.json`, so a country added to the map
+  cannot silently end up with no flag.
 - `python3 build/build_sat.py` reprojects `bluemarble_21600.jpg` into the tile pyramid under
   `sat/`. It takes an optional WebP quality argument and needs `numpy` and `Pillow`. It is the
   slow step, about 90 seconds and roughly 1.5 GB of memory, but its output only changes if the
@@ -116,12 +123,17 @@ those inputs change:
   21600x10800, from
   <https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73909/world.topo.bathy.200412.3x21600x10800.jpg>.
 
+Flags are stored lossless rather than lossy. Flags are flat colour with hard edges, the case
+lossless WebP compresses best and lossy compresses worst: Belarus at 1280 px is 3 KB lossless
+against 23 KB at quality 92, and the lossy copy rings around every edge of its ornament. All 197
+come to 1,035 KB.
+
 `build_sat.py` reads `map_data.json` for the projection it has to match, so the order matters: a
-run of `build_map.js` must be followed by `build_sat.py` before `build_app.js`. All three resolve
+run of `build_map.js` must be followed by `build_sat.py` before `build_app.js`. They resolve
 their paths from their own location, so they can be run from anywhere, and the full chain is:
 
 ```bash
-node build/build_map.js && python3 build/build_sat.py && node build/build_app.js
+node build/build_map.js && python3 build/build_sat.py && python3 build/build_flags.py && node build/build_app.js
 ```
 
 Publish the result with `./deploy.sh`, below.
@@ -139,7 +151,7 @@ It force-pushes `index.html` (plus an empty `.nojekyll`) to the `gh-pages` branc
 single commit with no parent, replacing whatever was there. `--dry-run` builds the commit
 locally and pushes nothing.
 
-The branch is rewritten rather than added to because `index.html` is 9.6 MB of
+The branch is rewritten rather than added to because `index.html` is 10.7 MB of
 already-compressed imagery. Git cannot delta one build against the previous one, so an
 ordinary commit per release would put a whole fresh copy into history, permanently, in
 every clone. Rewriting keeps the branch at exactly one copy, the current one. Nothing is

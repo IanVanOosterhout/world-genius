@@ -1,7 +1,7 @@
 #!/bin/sh
 # Publish index.html to the gh-pages branch as a single commit with no parent.
 #
-# index.html is 9.6 MB of already-compressed image data, which git cannot delta against
+# index.html is 10.7 MB of already-compressed image data, which git cannot delta against
 # a previous version: an ordinary commit of it adds a whole fresh copy to history, and
 # history is forever, so twenty updates would mean ~200 MB in every clone. Rewriting the
 # branch as one parentless commit each time keeps it at exactly one copy, the current one.
@@ -30,7 +30,7 @@ tree=$(printf '100644 blob %s\t.nojekyll\n100644 blob %s\tindex.html\n' "$nojeky
 commit=$(git commit-tree "$tree" -m "Deploy $(date -u '+%Y-%m-%d %H:%M UTC')")
 
 git update-ref refs/heads/gh-pages "$commit"
-# The reflog would otherwise pin the superseded 9.6 MB blob locally for 90 days.
+# The reflog would otherwise pin the superseded 10.7 MB blob locally for 90 days.
 git reflog expire --expire=now refs/heads/gh-pages 2>/dev/null || true
 
 if [ "$dry_run" -eq 1 ]; then

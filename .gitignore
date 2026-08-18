@@ -1,6 +1,6 @@
 # The built app. It lives on the gh-pages branch, one commit deep, and never in this
-# history: 9.6 MB of already-compressed image data cannot be delta'd, so every commit
-# of it would add a fresh 9.6 MB to the repository permanently. Use ./deploy.sh.
+# history: 10.7 MB of already-compressed image data cannot be delta'd, so every commit
+# of it would add a fresh 10.7 MB to the repository permanently. Use ./deploy.sh.
 index.html
 
 # 28 MB NASA source image. Public domain and re-downloadable, URL in README.md.
