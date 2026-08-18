@@ -88,3 +88,32 @@ slow step, about 90 seconds and roughly 1.5 GB of memory, but its output only ch
 projection or the source imagery does. The source is NASA's public-domain Blue Marble at
 21600x10800, from
 <https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73909/world.topo.bathy.200412.3x21600x10800.jpg>.
+
+## Publishing
+
+The game is one static file, so any static host serves it. `deploy.sh` publishes it to
+GitHub Pages:
+
+```bash
+./deploy.sh
+```
+
+It force-pushes `index.html` (plus an empty `.nojekyll`) to the `gh-pages` branch as a
+single commit with no parent, replacing whatever was there. `--dry-run` builds the commit
+locally and pushes nothing.
+
+The branch is rewritten rather than added to because `index.html` is 9.6 MB of
+already-compressed imagery. Git cannot delta one build against the previous one, so an
+ordinary commit per release would put a whole fresh copy into history, permanently, in
+every clone. Rewriting keeps the branch at exactly one copy, the current one. Nothing is
+lost by it: the build is reproducible from `build/`, and the source history on `main` is
+kept normally.
+
+For the same reason `index.html` is not tracked on `main` at all, and neither is
+`bluemarble_21600.jpg` (28 MB, re-downloadable from the NASA URL above) or the `sat/`
+pyramid built from it. Everything else, including the 197 flags and every clue, is in the
+repository.
+
+Updates reach players on reload. Pages serves with `Cache-Control: max-age=600`, so a
+browser that loaded the game in the last ten minutes may hold its cached copy until that
+window passes.
