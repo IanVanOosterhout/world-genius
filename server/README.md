@@ -19,9 +19,9 @@ from finished rounds submitted by players.
 | `POST` | `/v1/friends` | Ask someone to be friends, by name |
 | `POST` | `/v1/friends/accept` | Accept a request, which makes it mutual |
 | `POST` | `/v1/friends/decline` | Decline a request |
-| `POST` | `/v1/challenge` | Send a challenge: the round you played, and the questions in it |
-| `GET`  | `/v1/challenges` | Challenges waiting for you, sent by you, and settled |
-| `POST` | `/v1/challenge/result` | Answer a challenge you were sent |
+| `POST` | `/v1/challenge` | Create a challenge: the rules, and the questions both sides will meet |
+| `GET`  | `/v1/challenges` | Challenges to play, played and waiting on the other, and settled |
+| `POST` | `/v1/challenge/result` | Report your half of a challenge, from either side |
 
 A player is identified by a random id the browser generates and keeps, not by their name, so
 renaming yourself keeps your scores and your challenges. Names are unique because a friend finds
@@ -29,8 +29,14 @@ you by typing one. Friendship is mutual: asking creates a request, and accepting
 directions at once. Two people asking each other resolves immediately rather than crossing.
 
 A challenge carries its question set as `{iso, clue}` per question. The clue index is what makes a
-fact round reproducible: without it the opponent would meet the same countries but different
+fact round reproducible: without it the two players would meet the same countries but different
 questions, which is not the same round.
+
+The whole set is fixed when the challenge is created, before either player has touched it, so both
+of them can start at once and neither waits on the other to finish. The two sides are symmetric:
+each score is null until that player has played, `/v1/challenge/result` works out which half the
+caller is reporting, and whoever finishes second is the one who sees the verdict. The challenger is
+just the person who chose the rules.
 
 ## What it does not do
 

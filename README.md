@@ -63,8 +63,10 @@ Kosovo.
 - **Region**, whole world, or drill into Africa, Asia or Europe
 - **Zoom sensitivity**, 0.3x to 2.5x, default 1x. Scales how far one scroll notch or pinch zooms
   the map. The +/- buttons keep their fixed steps.
-- **Name assist**, off by default. Turn it on to see a country's name before you confirm;
-  leaving it off is the real test, since you only see the shape you highlighted.
+- **Practice Mode**, off by default. Turn it on to see a country's name before you confirm;
+  leaving it off is the real test, since you only see the shape you highlighted. Practice rounds
+  are not scored: they set no personal best and go on no board. There is no Practice Mode inside
+  a challenge.
 
 ## The leaderboard
 
@@ -81,38 +83,53 @@ the same number of questions and the same region. Its tabs pick the mode; the ro
 region come from the home screen. Ranking is by score, then by the longest streak behind it, then
 by whoever got there first.
 
-### This device, Friends, World
+### This device, Friends, World, Challenges
 
-The board has three reaches, chosen at the top of the leaderboard screen.
+The leaderboard has four tabs across the top.
 
 - **This device** is `localStorage` only: whoever has played in that browser. It needs no network
   and never fails.
-- **Friends** is the people you have added, and you. Add someone by typing their name.
+- **Friends** ranks the people you have added, and you.
 - **World** is everyone who has ever played.
+- **Challenges** is not a ranking but a record: your wins and losses, every settled head to head,
+  and the challenges still open on either side.
+
+**Friends themselves live on the home screen**, directly under your name, not inside the
+leaderboard. That is where you add one, answer a request, and start a challenge. The leaderboard's
+Friends tab only ranks them.
 
 Because a friend is found by typing their name, **names are unique**. The first person to claim
 one keeps it, and anyone else is asked to pick another.
 
 Friendship is mutual. Adding someone asks them; nothing appears on either board until they accept,
 and when they do you are on each other's board without either of you adding again. Requests wait
-under **Friends**, with Accept and Decline. If you each ask the other, that settles on the spot
+in the same panel, with Accept and Decline. If you each ask the other, that settles on the spot
 rather than leaving you both waiting.
 
 ## Challenge a friend
 
-Open the leaderboard, go to **Friends**, and press **Challenge** beside a name. You play a round
-there and then, and it is sent with the exact questions you were asked. Your friend gets it on
-their home screen and answers **the identical set**: same countries, same order, and in Fact Mode
-the same clue out of that country's ten, so neither of you gets an easier round. When they finish,
-both of you see the head to head.
+Press **Challenge** beside a friend's name on the home screen. You pick the rules for that round
+alone, mode, region and length, and press **Start**.
 
-When a challenge round ends, **Play again** becomes **Rematch**, which sends another challenge to
-the same person on the same setup. The questions are fresh: replaying the identical ones would
-only be a memory test. It keeps the mode, length and region of the round it came from, so a
-rematch stays comparable even if the home screen has been changed since.
+**The round is built for both of you at that moment.** You start playing it immediately, and so
+can they, from their home screen, without waiting for you to finish. Both of you meet **the
+identical set**: same countries, same order, and in Fact Mode the same clue out of that country's
+ten, so neither of you gets an easier round.
 
-A challenge is also an ordinary round: it counts towards your personal best and your place on the
-boards, the same as any other.
+Whoever finishes first is told the other is still playing. Whoever finishes second sees the
+result. Nobody is blocked on anybody, which is the point: a challenge is two people playing the
+same round, not one person waiting on another's turn.
+
+There is no Practice Mode inside a challenge. The two halves have to be the same round played the
+same way, and a score with the answers showing is not one the other player can be measured
+against. A challenge is otherwise an ordinary round: it counts towards your personal best and your
+place on the boards, the same as any other.
+
+**Rematch**, on the results screen, opens the setup again for the same person on the same rules,
+ready to start. The questions are fresh: replaying the identical ones would only be a memory test.
+
+The leaderboard's **Challenges** tab is the record: how many you have won and lost, every settled
+head to head with its score, and the ones still open, whether they are waiting on you or on them.
 
 Identity on the server is a random id the browser generates once, not your name, so renaming
 yourself keeps your scores and your challenges.

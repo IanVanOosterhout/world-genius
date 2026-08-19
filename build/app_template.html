@@ -342,8 +342,8 @@ svg#map.grabbing{cursor:grabbing}
 
 /* ---------- NAME GATE ---------- */
 /* Asked once on the first visit, and again only when someone hands the device over. */
-#gate{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:20px;background:rgba(6,10,20,.9);backdrop-filter:blur(7px)}
-#gate.on{display:grid}
+#gate,#chalSetup{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:20px;background:rgba(6,10,20,.9);backdrop-filter:blur(7px)}
+#gate.on,#chalSetup.on{display:grid}
 .gate-card{width:100%;max-width:390px;background:linear-gradient(160deg,var(--panel),var(--bg2));
   border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--sh);max-height:calc(100dvh - 40px);overflow-y:auto}
 .gate-card h2{margin:0 0 7px;font-size:21px;font-weight:800;letter-spacing:-.02em}
@@ -359,6 +359,13 @@ svg#map.grabbing{cursor:grabbing}
 .gate-or{margin:0 0 8px;color:var(--faint);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:700}
 .gate-err{color:var(--bad);font-size:12.5px;min-height:17px;margin-top:7px}
 .gate-btns{display:flex;gap:10px}
+/* The challenge setup: the same three choices the home screen offers, asked once, for one round. */
+.cs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.cs-row>b{font-size:13px;font-weight:600;color:var(--dim);flex:0 0 auto}
+.cs-row .seg button{min-width:0;padding:7px 10px;font-size:12.5px}
+.cs-row .num{width:76px;padding:8px 10px;font-size:15px}
+.cs-note{margin:2px 0 16px;color:var(--faint);font-size:12px;line-height:1.5}
+.cs-err{margin:0;color:var(--bad);font-size:12.5px;min-height:17px}
 
 @media (min-width:860px) and (orientation:landscape){
   .prompt{min-height:88px}
@@ -547,6 +554,7 @@ svg#map.grabbing{cursor:grabbing}
         <button role="radio" data-scope="local">This device</button>
         <button role="radio" data-scope="friends">Friends</button>
         <button role="radio" data-scope="world">World</button>
+        <button role="radio" data-scope="chal">Challenges</button>
       </div>
       <div class="seg" id="boardSeg" role="radiogroup" aria-label="Leaderboard mode">
         <button role="radio" data-bmode="fact">Fact</button>
@@ -571,6 +579,50 @@ svg#map.grabbing{cursor:grabbing}
       <div class="gate-btns">
         <button class="btn" id="gateGo">Start playing</button>
         <button class="btn ghost" id="gateCancel" hidden>Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHALLENGE SETUP -->
+  <div id="chalSetup" role="dialog" aria-modal="true" aria-labelledby="csTitle" hidden>
+    <div class="gate-card">
+      <h2 id="csTitle">Challenge</h2>
+      <p class="msg" id="csMsg"></p>
+      <div class="cs-row">
+        <b>Mode</b>
+        <div class="seg" id="csMode" role="radiogroup" aria-label="Challenge mode">
+          <button role="radio" data-mode="fact">Fact</button>
+          <button role="radio" data-mode="flag">Flag</button>
+          <button role="radio" data-mode="capital">Capital</button>
+        </div>
+      </div>
+      <div class="cs-row">
+        <b>Region</b>
+        <div class="seg" id="csReg" role="radiogroup" aria-label="Challenge region">
+          <button role="radio" data-reg="all">World</button>
+          <button role="radio" data-reg="Africa">Africa</button>
+          <button role="radio" data-reg="Asia">Asia</button>
+          <button role="radio" data-reg="Europe">Europe</button>
+        </div>
+      </div>
+      <div class="cs-row">
+        <b>Questions</b>
+        <div class="seg" id="csLen" role="radiogroup" aria-label="Questions per round">
+          <button role="radio" data-len="5">5</button>
+          <button role="radio" data-len="10">10</button>
+          <button role="radio" data-len="20">20</button>
+          <button role="radio" data-len="custom">Custom</button>
+        </div>
+      </div>
+      <div class="cs-row" id="csCustomRow" hidden>
+        <b>How many</b>
+        <input class="num" type="number" id="csNum" min="1" max="197" step="1" aria-label="Number of questions">
+      </div>
+      <p class="cs-err" id="csErr"></p>
+      <p class="cs-note" id="csNote"></p>
+      <div class="gate-btns">
+        <button class="btn" id="csStart">Start</button>
+        <button class="btn ghost" id="csCancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -739,7 +791,7 @@ if(!/^[0-9a-f]{16,64}$/.test(pid)){
 let friends = [];        // filled from the server; the friends board is never local
 let incoming = [];       // friend requests waiting on you
 let outgoing = [];       // friend requests you are waiting on
-let challenges = { waiting: [], sent: [], done: [] };
+let challenges = { waiting: [], pending: [], done: [] };
 
 async function api(path, opts){
   const ctl = new AbortController();
@@ -821,9 +873,9 @@ async function loadFriends(){
 async function loadChallenges(){
   const r = await api("/v1/challenges?playerId=" + pid);
   challenges = {
-    waiting: Array.isArray(r.waiting) ? r.waiting : [],
-    sent:    Array.isArray(r.sent)    ? r.sent    : [],
-    done:    Array.isArray(r.done)    ? r.done    : [] };
+    waiting: Array.isArray(r.waiting) ? r.waiting : [],   // still yours to play
+    pending: Array.isArray(r.pending) ? r.pending : [],   // you played, they have not
+    done:    Array.isArray(r.done)    ? r.done    : [] }; // both in, settled
   return challenges;
 }
 
@@ -1224,10 +1276,11 @@ function handleTap(cx, cy){
 
 /* ===== Game state ===== */
 const ALL_ISO = MAP.playable.map(c=>c.iso).filter(i=>C[i]);
-/* `challenge` is null for an ordinary round. Sending one records the exact questions asked so
-   the opponent can be given the identical round; answering one replays those questions instead
-   of drawing fresh ones. `clues` is the clue index used per question, which is what makes a fact
-   round reproducible rather than merely the same countries. */
+/* `challenge` is null for an ordinary round. Otherwise it carries the set both players were
+   given, decided when the challenge was created, so a challenge round replays those questions
+   rather than drawing fresh ones, on whichever side is playing. `clues` is the clue index used
+   per question, which is what makes a fact round reproducible rather than merely the same
+   countries. */
 const state = { mode:"fact", reg:"all", queue:[], i:0, score:0, streak:0, bestStreak:0, sel:null,
                 log:[], phase:"idle", clue:0, clues:[], challenge:null };
 
@@ -1299,12 +1352,15 @@ function cleanSeen(x){
    Written on every tap and every answer so a reload, a crash or a closed tab can pick the
    round back up. Only whole rounds count towards a personal best, so this is the one thing
    that would otherwise be lost. Bumped if the shape below ever changes. */
-const ROUND_V = 4;
+const ROUND_V = 5;
 function saveRound(){
   if(state.phase==="idle") return;
   store.set("round", { v:ROUND_V, player:player, mode:state.mode, reg:state.reg, queue:state.queue, i:state.i,
     score:state.score, streak:state.streak, bestStreak:state.bestStreak, sel:state.sel,
-    log:state.log, phase:state.phase, clue:state.clue, seen:seen, practice:!!state.practice });
+    log:state.log, phase:state.phase, clue:state.clue, seen:seen, practice:!!state.practice,
+    // Without this a reload turned a challenge round into an ordinary one: the questions would
+    // survive but the id would not, so the half being played could never be reported.
+    challenge:state.challenge });
 }
 function dropRound(){ store.del("round"); paintResume(); }
 
@@ -1326,6 +1382,13 @@ function loadRound(){
   if(r.log.length !== r.i + (r.phase==="revealed"?1:0)) return null;
   if(r.phase==="revealed" && r.log[r.i].ans !== r.queue[r.i]) return null;
   if(r.log.filter(e=>e.ok).length !== r.score) return null;
+  // A half-written challenge is worse than none: it would play as a challenge and report nowhere.
+  if(r.challenge){
+    const c = r.challenge;
+    if(typeof c.id !== "string" || !/^[0-9a-f]{16,64}$/.test(c.id)) return null;
+    if(!Array.isArray(c.questions) || c.questions.length !== r.queue.length) return null;
+    if(typeof c.opponent !== "string" || !c.opponent) return null;
+  }
   return r;
 }
 
@@ -1333,19 +1396,19 @@ function startRound(mode, challenge){
   state.mode=mode; state.reg=settings.reg; state.i=0; state.score=0; state.streak=0; state.bestStreak=0;
   state.log=[]; state.clues=[]; state.challenge=challenge||null;
   /* Read once, here, rather than at the end: flicking the switch off on the last question would
-     otherwise turn a round played with the answers showing into a leaderboard score. */
-  state.practice = !!settings.practice;
+     otherwise turn a round played with the answers showing into a leaderboard score. A challenge
+     is never practice: the two halves have to be the same round played the same way, and a score
+     with the answers showing is not a score the other player can be measured against. */
+  state.practice = challenge ? false : !!settings.practice;
   lastMode = mode;
   store.set("lastMode", mode);
-  if(challenge && challenge.answering){
-    // The set is already decided: same countries, same order, same clues.
+  if(challenge){
+    // Decided when the challenge was created, before either player touched it: same countries,
+    // same order, same clues, whichever side is playing and whichever of them got there first.
     state.reg = challenge.reg;
     state.queue = challenge.questions.map(q=>q.iso).filter(i=>C[i]);
   }else{
-    // A rematch carries the setup of the round being answered back, so both halves of a pair are
-    // comparable. Everything else follows the home screen.
-    if(challenge && challenge.reg) state.reg = challenge.reg;
-    state.queue = buildQueue(state.reg, challenge && challenge.len ? challenge.len : settings.len);
+    state.queue = buildQueue(state.reg, settings.len);
   }
   show("game");
   resetView();
@@ -1354,18 +1417,20 @@ function startRound(mode, challenge){
 
 /* Sending a challenge posts the round just played along with the questions in it. Answering one
    posts only the score, because the questions are already on the server. */
+/* Both players report the same way: the server works out which half of the challenge this is.
+   The answer carries the head to head as it stands, which is what the results screen shows. */
 function submitChallenge(){
   const c = state.challenge;
-  if(!c || !player) return;
-  if(c.answering){
-    apiPost("/v1/challenge/result", { playerId:pid, id:c.id, score:state.score, streak:state.bestStreak })
-      .catch(()=>{});
-  }else{
-    const questions = state.queue.map((iso,i)=>({ iso, clue: state.clues[i]|0 }));
-    apiPost("/v1/challenge", { playerId:pid, name:player, toName:c.toName, mode:state.mode,
-      len:state.queue.length, reg:state.reg, questions, score:state.score, streak:state.bestStreak })
-      .catch(()=>{});
-  }
+  if(!c || !player) return Promise.reject(new Error("no challenge"));
+  return apiPost("/v1/challenge/result",
+    { playerId:pid, id:c.id, score:state.score, streak:state.bestStreak });
+}
+
+/* The question set, decided up front so that both players can start at once. Clues are drawn
+   here rather than during the round, because "the same round" means the same clue for the same
+   country on both screens. */
+function buildChallengeSet(mode, reg, len){
+  return buildQueue(reg, len).map(iso => ({ iso, clue: mode === "fact" ? pickClue(iso) : 0 }));
 }
 
 function resumeRound(){
@@ -1374,7 +1439,9 @@ function resumeRound(){
   state.mode=r.mode; state.reg=typeof r.reg==="string"?r.reg:"all";
   state.queue=r.queue; state.i=r.i; state.score=r.score;
   state.streak=r.streak; state.bestStreak=r.bestStreak; state.log=r.log; state.clue=r.clue|0;
-  state.practice=!!r.practice;
+  state.challenge = r.challenge || null;
+  // A challenge is never practice, however the round was stored.
+  state.practice = state.challenge ? false : !!r.practice;
   for(const k in seen) delete seen[k];
   Object.assign(seen, cleanSeen(r.seen));
   show("game");
@@ -1410,7 +1477,7 @@ function nextQuestion(resuming){
   if(state.mode==="fact"){
     // Answering a challenge means meeting the clue the challenger met, not a fresh draw.
     if(!resuming){
-      const fixed = state.challenge && state.challenge.answering && state.challenge.questions[state.i];
+      const fixed = state.challenge && state.challenge.questions[state.i];
       state.clue = fixed ? fixed.clue : pickClue(iso);
     }
     const f = c.f[state.clue] || c.f[0];
@@ -1536,11 +1603,11 @@ function ord(n){ const t=["th","st","nd","rd"], v=n%100; return n+(t[(v-20)%10]|
 function finish(){
   const n=state.queue.length, s=state.score;
   const prev = bestScore(state.mode,n,state.reg)||0;
+  // A challenge round counts like any other: same board, same personal best.
   if(!state.practice){
     recordRound();
     submitRound();
   }
-  if(state.challenge) submitChallenge();
   state.phase="idle";
   dropRound();
   const pct = Math.round(s/n*100);
@@ -1553,19 +1620,28 @@ function finish(){
   // Held past the round so the button still knows who to play again, since starting a new round
   // clears state.challenge.
   lastChallenge = state.challenge
-    ? { opponent: state.challenge.answering ? state.challenge.opponent : state.challenge.toName,
-        mode: state.mode, len: n, reg: state.reg }
+    ? { opponent: state.challenge.opponent, mode: state.mode, len: n, reg: state.reg }
     : null;
   $("againBtn").textContent = lastChallenge ? `Rematch ${lastChallenge.opponent}` : "Play again";
 
   const ch = state.challenge;
-  if(ch && ch.answering){
-    // Both halves of the same question set, so the comparison is the whole point of the screen.
-    $("rSub").textContent = s > ch.theirScore ? `You beat ${ch.opponent}, ${s} to ${ch.theirScore}.`
-      : s < ch.theirScore ? `${ch.opponent} wins, ${ch.theirScore} to ${s}.`
-      : `A draw with ${ch.opponent}, ${s} each.`;
-  }else if(ch){
-    $("rSub").textContent = `Challenge sent to ${ch.toName}. They answer the same ${n} questions.`;
+  if(ch){
+    /* Neither player waits for the other to start, so finishing first is normal and has to read
+       as a state rather than a failure. The verdict is whatever the server says once this half
+       has landed: a result if both are in, otherwise word that the other is still playing. */
+    const opp = ch.opponent;
+    $("rSub").textContent = `Challenge vs ${opp} · reporting your score\u2026`;
+    submitChallenge().then(r => {
+      $("rSub").textContent = !r.theirTurnDone
+        ? `Challenge vs ${opp} · you scored ${r.yourScore}/${n}. Waiting for them to finish.`
+        : r.yourScore > r.theirScore ? `You beat ${opp}, ${r.yourScore} to ${r.theirScore}.`
+        : r.yourScore < r.theirScore ? `${opp} wins, ${r.theirScore} to ${r.yourScore}.`
+        : `A draw with ${opp}, ${r.yourScore} each.`;
+      refreshSocial();
+    }).catch(() => {
+      $("rSub").textContent = `Challenge vs ${opp} · could not reach the server.`
+        + ` Your ${s}/${n} is safe here; open the game again to send it.`;
+    });
   }else if(state.practice){
     // No personal best and no board position, because neither was written. Saying so is the
     // point: a screen that quietly showed the old ranking would read as though this round counted.
@@ -1649,6 +1725,14 @@ function paintBoard(){
   for(const b of $("boardSeg").children) b.setAttribute("aria-checked", String(b.dataset.bmode===boardMode));
   for(const b of $("scopeSeg").children) b.setAttribute("aria-checked", String(b.dataset.scope===boardScope));
   const len = settings.len, reg = settings.reg, regName = reg==="all" ? "World" : reg;
+
+  /* The challenge log is a record of head to heads, not a ranking of one setup, so the mode tabs
+     and the play button have nothing to say about it and step aside. */
+  const isChal = boardScope === "chal";
+  $("boardSeg").hidden = isChal;
+  $("boardPlay").hidden = isChal;
+  if(isChal){ paintChalBoard(); return; }
+
   $("boardSub").textContent =
     `${len} questions · ${regName}. Change the round length or region on the home screen for the other boards.`;
 
@@ -1695,7 +1779,7 @@ function paintFriends(){
     </div>`).join("");
   const list = friends.map(f => `<div class="fr">
       <b>${esc(f.name)}</b>
-      <button type="button" class="chal" data-challenge="${esc(f.name)}">Challenge · ${MODE_SHORT[lastMode]}</button>
+      <button type="button" class="chal" data-challenge="${esc(f.name)}">Challenge</button>
     </div>`).join("");
   // Someone you have asked is neither a friend nor an action: shown so you know it was sent.
   const sent = outgoing.map(f => `<div class="fr pend">
@@ -1720,6 +1804,44 @@ function friendNote(msg, good){
   const n = $("friendNote");
   if(n){ n.textContent = msg; n.classList.toggle("good", !!good); }
 }
+/* Every challenge this player has a half in, newest first, with the record across the top. Wins
+   are the thing being logged, so they lead; the rest is there to make a win mean something. */
+function paintChalBoard(){
+  const done = challenges.done, pend = challenges.pending, wait = challenges.waiting;
+  let won = 0, lost = 0, drew = 0;
+  for(const c of done){
+    if(c.yourScore > c.theirScore) won++;
+    else if(c.yourScore < c.theirScore) lost++;
+    else drew++;
+  }
+  $("boardSub").textContent = done.length
+    ? `${won} won · ${lost} lost${drew?` · ${drew} drawn`:""} across ${done.length} settled challenge${done.length===1?"":"s"}.`
+    : "No challenge has been settled yet.";
+
+  const settled = done.map(c => {
+    const w = c.yourScore > c.theirScore, l = c.yourScore < c.theirScore;
+    return `<div class="r${w?" p1":""}">
+      <span class="rk">${w?"W":l?"L":"D"}</span>
+      <span class="nm"><b>${esc(c.opponent)}</b><small>${MODE_SHORT[c.mode]} Mode · ${c.len} question${c.len===1?"":"s"} · ${c.reg==="all"?"World":esc(c.reg)}</small></span>
+      <span class="sc"><b>${c.yourScore}&ndash;${c.theirScore}</b><small>${esc(chalVerdict(c))}</small></span>
+    </div>`;
+  }).join("");
+  const open = pend.map(c => `<div class="r">
+      <span class="rk">&middot;</span>
+      <span class="nm"><b>${esc(c.opponent)}</b><small>${MODE_SHORT[c.mode]} Mode · waiting for them to finish</small></span>
+      <span class="sc"><b>${c.yourScore}/${c.len}</b><small>your score</small></span>
+    </div>`).join("");
+  const yours = wait.map(c => `<div class="r">
+      <span class="rk">&middot;</span>
+      <span class="nm"><b>${esc(c.opponent)}</b><small>${MODE_SHORT[c.mode]} Mode · still yours to play</small></span>
+      <span class="sc"><b>&mdash;</b><small>not played</small></span>
+    </div>`).join("");
+
+  $("lbList").hidden = false;
+  $("lbList").innerHTML = (settled + open + yours) ||
+    `<div class="lb-empty">No challenges yet.<br>Challenge a friend from the home screen to start one.</div>`;
+}
+
 function showBoard(mode){
   boardMode = MODE_LABEL[mode] ? mode : "fact";
   paintBoard();
@@ -1796,7 +1918,7 @@ $("styleSeg").onclick = e=>{
 $("zoomRng").oninput = e=>{ settings.zoomSens=+e.target.value; store.set("zoomSens",settings.zoomSens); paintSettings(); };
 $("practiceSw").onclick = ()=>{ settings.practice=!settings.practice; store.set("practice",settings.practice); paintSettings(); if(state.phase==="answering") renderAct(); };
 for(const b of document.querySelectorAll(".mode")) b.onclick = ()=>{ lastChallenge=null; startRound(b.dataset.mode); };
-function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; lastChallenge=null; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); paintPlayer(); paintChallenges(); refreshSocial(); }
+function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; lastChallenge=null; clearPtrs(); closeFlagZoom(); closeChalSetup(); show("home"); paintSettings(); paintResume(); paintPlayer(); paintChallenges(); refreshSocial(); }
 $("quitBtn").onclick = goHome;
 $("resumeBtn").onclick = resumeRound;
 $("resumeDrop").onclick = dropRound;
@@ -1804,9 +1926,14 @@ $("resumeDrop").onclick = dropRound;
    same setup: replaying the identical questions would only be a memory test. */
 let lastChallenge = null;
 $("againBtn").onclick = ()=>{
+  // A rematch is a new challenge on the same rules: same opponent, same setup, fresh questions.
+  // Replaying the identical set would only be a memory test, and the other player has seen it.
   if(lastChallenge){
-    startRound(lastChallenge.mode, { answering:false, toName:lastChallenge.opponent,
-                                     len:lastChallenge.len, reg:lastChallenge.reg });
+    openChalSetup(lastChallenge.opponent);
+    cs.mode = lastChallenge.mode; cs.reg = lastChallenge.reg; cs.len = lastChallenge.len;
+    cs.custom = ![5,10,20].includes(cs.len);
+    csClamp();
+    paintChalSetup();
   }else{
     startRound(state.mode);
   }
@@ -1824,8 +1951,7 @@ $("friendsBox").onclick = async e => {
   if(!b) return;
 
   if(b.dataset.challenge){
-    // A challenge is an ordinary round that happens to be recorded and sent when it ends.
-    startRound(lastMode, { answering:false, toName:b.dataset.challenge });
+    openChalSetup(b.dataset.challenge);
     return;
   }
 
@@ -1870,24 +1996,34 @@ $("friendsBox").onclick = async e => {
 
 /* Challenges waiting on the home screen. Only shown when there are any, so an ordinary visit is
    unchanged. */
+/* The verdict on a settled challenge, from this player's side. */
+function chalVerdict(c){
+  return c.yourScore > c.theirScore ? "You won"
+       : c.yourScore < c.theirScore ? `${c.opponent} won`
+       : "A draw";
+}
+
 function paintChallenges(){
   const card = $("chalCard");
-  const w = challenges.waiting, d = challenges.done;
-  if(!w.length && !d.length){ card.hidden = true; return; }
+  const w = challenges.waiting, pend = challenges.pending, d = challenges.done;
+  if(!w.length && !pend.length && !d.length){ card.hidden = true; return; }
   card.hidden = false;
+  /* Whoever created it has not necessarily played it, so the line says what is true rather than
+     assuming the other player went first. */
   const rows = w.map(c => `<div class="ch">
-      <div class="cz"><b>${esc(c.from)} challenged you</b>
-        <small>${MODE_SHORT[c.mode]} Mode · ${c.len} questions · they scored ${c.theirScore}/${c.len}</small></div>
+      <div class="cz"><b>${c.youStarted ? "Your challenge to " + esc(c.opponent) : esc(c.opponent) + " challenged you"}</b>
+        <small>${MODE_SHORT[c.mode]} Mode · ${c.len} question${c.len===1?"":"s"} · ${c.reg==="all"?"World":esc(c.reg)}</small></div>
       <button class="btn" type="button" data-play="${esc(c.id)}">Play</button>
     </div>`).join("");
-  const recent = d.slice(0,3).map(c => {
-    const verdict = c.yourScore > c.theirScore ? "You won" : c.yourScore < c.theirScore ? `${esc(c.opponent)} won` : "A draw";
-    return `<div class="ch done">
-      <div class="cz"><b>${verdict}</b>
+  const held = pend.slice(0,3).map(c => `<div class="ch done">
+      <div class="cz"><b>Waiting for ${esc(c.opponent)}</b>
+        <small>you scored ${c.yourScore}/${c.len} · ${MODE_SHORT[c.mode]} Mode</small></div>
+    </div>`).join("");
+  const recent = d.slice(0,3).map(c => `<div class="ch done">
+      <div class="cz"><b>${esc(chalVerdict(c))}</b>
         <small>vs ${esc(c.opponent)} · ${c.yourScore}&ndash;${c.theirScore} · ${MODE_SHORT[c.mode]} Mode</small></div>
-    </div>`;
-  }).join("");
-  card.innerHTML = `<h3>Challenges</h3>${rows}${recent}`;
+    </div>`).join("");
+  card.innerHTML = `<h3>Challenges</h3>${rows}${held}${recent}`;
 }
 
 $("chalCard").onclick = e => {
@@ -1895,8 +2031,106 @@ $("chalCard").onclick = e => {
   if(!b) return;
   const c = challenges.waiting.find(x => x.id === b.dataset.play);
   if(!c) return;
-  startRound(c.mode, { answering:true, id:c.id, questions:c.questions, reg:c.reg,
-                       opponent:c.from, theirScore:c.theirScore });
+  startRound(c.mode, { id:c.id, questions:c.questions, reg:c.reg, len:c.len, opponent:c.opponent });
+};
+
+/* ===== Challenge setup =====
+   The rules are chosen once, by whoever starts it, and then belong to the round rather than to
+   either player's home screen: changing the length afterwards cannot move the goalposts on a
+   challenge already out there. Everything opens on the home screen's current settings, because
+   that is what the player was already looking at. */
+const cs = { to:"", mode:"fact", reg:"all", len:10, custom:false, busy:false };
+
+function csMax(){ return maxLen(cs.reg); }
+function paintChalSetup(){
+  $("csTitle").textContent = `Challenge ${cs.to}`;
+  $("csMsg").textContent =
+    "Both of you play the same questions, in the same order. Neither waits for the other: "
+    + "whoever finishes second sees the result.";
+  for(const b of $("csMode").children) b.setAttribute("aria-checked", String(b.dataset.mode===cs.mode));
+  for(const b of $("csReg").children)  b.setAttribute("aria-checked", String(b.dataset.reg===cs.reg));
+  const cap = csMax();
+  for(const b of $("csLen").children){
+    if(b.dataset.len === "custom"){
+      b.setAttribute("aria-checked", String(cs.custom));
+      b.disabled = false;
+    }else{
+      const v = +b.dataset.len;
+      b.setAttribute("aria-checked", String(!cs.custom && v===cs.len));
+      b.disabled = v > cap;
+    }
+  }
+  $("csCustomRow").hidden = !cs.custom;
+  const num = $("csNum");
+  num.max = cap;
+  num.value = cs.len;
+  $("csNote").textContent =
+    `${MODE_SHORT[cs.mode]} Mode · ${cs.len} question${cs.len===1?"":"s"} · `
+    + `${cs.reg==="all"?"the whole world":cs.reg} · counts on the leaderboard, no Practice Mode.`;
+  $("csStart").disabled = cs.busy;
+  $("csStart").textContent = cs.busy ? "Starting\u2026" : "Start";
+}
+function csClamp(){ cs.len = Math.min(Math.max(1, cs.len), csMax()); if(![5,10,20].includes(cs.len)) cs.custom = true; }
+
+function openChalSetup(name){
+  cs.to = name;
+  cs.mode = lastMode; cs.reg = settings.reg; cs.len = settings.len; cs.custom = settings.custom;
+  cs.busy = false;
+  csClamp();
+  $("csErr").textContent = "";
+  paintChalSetup();
+  $("chalSetup").hidden = false;
+  $("chalSetup").classList.add("on");
+}
+function closeChalSetup(){
+  $("chalSetup").classList.remove("on");
+  $("chalSetup").hidden = true;
+}
+const chalSetupOpen = () => $("chalSetup").classList.contains("on");
+
+$("csMode").onclick = e=>{ const b=e.target.closest("button"); if(!b)return; cs.mode=b.dataset.mode; paintChalSetup(); };
+$("csReg").onclick  = e=>{ const b=e.target.closest("button"); if(!b)return; cs.reg=b.dataset.reg; csClamp(); paintChalSetup(); };
+$("csLen").onclick  = e=>{
+  const b=e.target.closest("button");
+  if(!b || b.disabled) return;
+  cs.custom = b.dataset.len === "custom";
+  if(!cs.custom) cs.len = +b.dataset.len;
+  csClamp();
+  paintChalSetup();
+  if(cs.custom) $("csNum").focus();
+};
+$("csNum").oninput = e=>{
+  const v = Math.round(+e.target.value);
+  if(!Number.isFinite(v) || v < 1) return;     // mid-typing
+  cs.len = Math.min(v, csMax());
+  $("csNote").textContent =
+    `${MODE_SHORT[cs.mode]} Mode · ${cs.len} question${cs.len===1?"":"s"} · `
+    + `${cs.reg==="all"?"the whole world":cs.reg} · counts on the leaderboard, no Practice Mode.`;
+};
+$("csNum").onblur = ()=>{ csClamp(); paintChalSetup(); };
+$("csCancel").onclick = closeChalSetup;
+
+/* Start creates the challenge and then plays it. The round cannot begin before the server has
+   the set, because the id it hands back is how this half is reported and how the other player
+   gets the identical questions. Offline there is no challenge to make, so it says so. */
+$("csStart").onclick = async ()=>{
+  if(cs.busy) return;
+  cs.busy = true; $("csErr").textContent = ""; paintChalSetup();
+  const { to, mode, reg, len } = cs;
+  const questions = buildChallengeSet(mode, reg, len);
+  try{
+    const r = await apiPost("/v1/challenge",
+      { playerId:pid, name:player, toName:to, mode, len, reg, questions });
+    closeChalSetup();
+    startRound(mode, { id:r.id, questions, reg, len, opponent:r.opponent || to });
+    refreshSocial();
+  }catch(err){
+    cs.busy = false;
+    $("csErr").textContent = err && err.message === "no such player"
+      ? `Nobody is playing under the name ${to}.`
+      : "Could not reach the server. A challenge needs it, so try again in a moment.";
+    paintChalSetup();
+  }
 };
 
 /* Everything the home screen shows about other people needs the network, and none of it may hold
@@ -1990,11 +2224,13 @@ flagZoom.onclick = closeFlagZoom;
 addEventListener("keydown", e=>{
   if(e.key==="Escape"){
     if(gateOpen()){ if(gateMode==="switch"){ e.preventDefault(); closeGate(); } return; }
+    if(chalSetupOpen()){ e.preventDefault(); closeChalSetup(); return; }
     if(flagZoomOpen()){ e.preventDefault(); closeFlagZoom(); return; }
     if($("game").classList.contains("on")) goHome();
   }
   if(e.key==="Enter"){
     if(gateOpen()) return;   // the name field handles its own Enter
+    if(chalSetupOpen()){ e.preventDefault(); $("csStart").click(); return; }
     if(flagZoomOpen()){ e.preventDefault(); closeFlagZoom(); return; }
     const c=$("confirmBtn")||$("nextBtn");
     if(c && $("game").classList.contains("on")){ e.preventDefault(); c.click(); }

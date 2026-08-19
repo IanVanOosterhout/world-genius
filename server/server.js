@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { pool, migrate } from "./db.js";
 import {
   cleanName, validPlayerId, validChallengeId, validQuestions,
-  validRound, validQuery, validSetup, validResult,
+  validRound, validQuery, validSetup,
 } from "./validate.js";
 
 const PORT = process.env.PORT || 3000;
@@ -222,6 +222,8 @@ async function listFriends(playerId) {
 /* Creating a challenge records the challenger's round at the same time, because a challenge with
    nothing to beat is not a challenge. The question set travels with it so the opponent meets the
    identical round, clue for clue. */
+/* The set is decided here, before either player has touched it, which is what lets both of them
+   start at once. No score is written: the challenger is only the person who chose the rules. */
 async function createChallenge(b) {
   const found = await pool.query("SELECT id FROM players WHERE lower(name) = lower($1)", [b.toName]);
   if (!found.rowCount) return { error: "no such player", status: 404 };
@@ -229,33 +231,56 @@ async function createChallenge(b) {
   if (toId === b.playerId) return { error: "that is you", status: 400 };
   const id = crypto.randomBytes(12).toString("hex");
   await pool.query(
-    `INSERT INTO challenges (id, from_id, to_id, mode, len, reg, questions, from_score, from_streak)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [id, b.playerId, toId, b.mode, b.len, b.reg, JSON.stringify(b.questions), b.score, b.streak]
+    `INSERT INTO challenges (id, from_id, to_id, mode, len, reg, questions)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [id, b.playerId, toId, b.mode, b.len, b.reg, JSON.stringify(b.questions)]
   );
-  return { id };
+  return { id, opponent: found.rows[0].name };
 }
 
-async function answerChallenge(playerId, id, score, streak) {
-  const { rows } = await pool.query("SELECT * FROM challenges WHERE id = $1", [id]);
+/* Either player reporting their own half. The two sides are symmetric, so this works out which
+   one is calling rather than assuming the challenger went first, and answers with the head to
+   head as it stands: a verdict once both are in, otherwise word that the other is still playing. */
+async function playChallenge(playerId, id, score, streak) {
+  const { rows } = await pool.query(
+    `SELECT c.*, pf.name AS from_name, pt.name AS to_name
+       FROM challenges c
+       JOIN players pf ON pf.id = c.from_id
+       JOIN players pt ON pt.id = c.to_id
+      WHERE c.id = $1`, [id]);
   if (!rows.length) return { error: "no such challenge", status: 404 };
   const c = rows[0];
-  if (c.to_id !== playerId) return { error: "not your challenge", status: 403 };
-  if (c.played_at) return { error: "already played", status: 409 };
+  const mine = c.from_id === playerId ? "from" : c.to_id === playerId ? "to" : null;
+  if (!mine) return { error: "not your challenge", status: 403 };
+  if (c[mine + "_played_at"]) return { error: "already played", status: 409 };
   if (score > c.len || streak > c.len) return { error: "bad score", status: 400 };
-  await pool.query(
-    "UPDATE challenges SET to_score = $2, to_streak = $3, played_at = now() WHERE id = $1",
-    [id, score, streak]
-  );
-  return { ok: true };
+
+  const theirs = mine === "from" ? "to" : "from";
+  const { rows: after } = await pool.query(
+    `UPDATE challenges
+        SET ${mine}_score = $2, ${mine}_streak = $3, ${mine}_played_at = now()
+      WHERE id = $1
+      RETURNING from_score, to_score, from_streak, to_streak, from_played_at, to_played_at`,
+    [id, score, streak]);
+  const a = after[0];
+  return {
+    ok: true,
+    yourScore: a[mine + "_score"],
+    theirScore: a[theirs + "_score"],
+    theirStreak: a[theirs + "_streak"],
+    theirTurnDone: !!a[theirs + "_played_at"],
+    opponent: mine === "from" ? c.to_name : c.from_name,
+  };
 }
 
-/* Everything the challenges screen needs in one call: rounds waiting to be played, and finished
-   ones from either side so both players see the head to head. */
+/* Everything the challenges screen needs in one call, bucketed by what the player can do about
+   each one rather than by who started it: rounds still to play, rounds played and waiting on the
+   opponent, and finished head to heads. Who sent it is kept as a label, nothing more. */
 async function listChallenges(playerId) {
   const { rows } = await pool.query(
     `SELECT c.id, c.mode, c.len, c.reg, c.questions, c.from_id, c.to_id,
-            c.from_score, c.from_streak, c.to_score, c.to_streak, c.played_at, c.created_at,
+            c.from_score, c.from_streak, c.to_score, c.to_streak,
+            c.from_played_at, c.to_played_at, c.created_at,
             pf.name AS from_name, pt.name AS to_name
        FROM challenges c
        JOIN players pf ON pf.id = c.from_id
@@ -264,24 +289,28 @@ async function listChallenges(playerId) {
       ORDER BY c.created_at DESC
       LIMIT 50`, [playerId]);
 
-  const waiting = [], done = [], sent = [];
+  const waiting = [], pending = [], done = [];
   for (const c of rows) {
     const mine = c.from_id === playerId;
+    const youPlayed  = !!(mine ? c.from_played_at : c.to_played_at);
+    const theyPlayed = !!(mine ? c.to_played_at : c.from_played_at);
     const row = {
       id: c.id, mode: c.mode, len: c.len, reg: c.reg,
-      from: c.from_name, to: c.to_name,
-      yourScore: mine ? c.from_score : c.to_score,
-      theirScore: mine ? c.to_score : c.from_score,
+      yourScore:  mine ? c.from_score  : c.to_score,
+      theirScore: mine ? c.to_score    : c.from_score,
       yourStreak: mine ? c.from_streak : c.to_streak,
-      theirStreak: mine ? c.to_streak : c.from_streak,
+      theirStreak: mine ? c.to_streak  : c.from_streak,
       opponent: mine ? c.to_name : c.from_name,
       youStarted: mine,
+      at: c.created_at,
     };
-    if (c.played_at) done.push(row);
-    else if (mine) sent.push(row);
-    else waiting.push(Object.assign({ questions: c.questions, theirScore: c.from_score }, row));
+    // The question set travels with anything still to play, because that is the whole point of
+    // building it up front: the round is ready the moment it is opened.
+    if (!youPlayed) waiting.push(Object.assign({ questions: c.questions }, row));
+    else if (!theyPlayed) pending.push(row);
+    else done.push(row);
   }
-  return { waiting, sent, done };
+  return { waiting, pending, done };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -371,12 +400,10 @@ const server = http.createServer(async (req, res) => {
       if (setup) return send(res, 400, { error: "bad " + setup });
       const qs = validQuestions(b.questions, b.len);
       if (qs) return send(res, 400, { error: "bad " + qs });
-      const result = validResult(b, b.len);
-      if (result) return send(res, 400, { error: "bad " + result });
       await claimName(b.playerId, myName);
       const r = await createChallenge(Object.assign({}, b, { toName }));
       if (r.error) return send(res, r.status, { error: r.error });
-      return send(res, 200, { ok: true, id: r.id });
+      return send(res, 200, { ok: true, id: r.id, opponent: r.opponent });
     }
 
     if (path === "/v1/challenges" && req.method === "GET") {
@@ -391,9 +418,9 @@ const server = http.createServer(async (req, res) => {
       if (!validChallengeId(b.id)) return send(res, 400, { error: "bad id" });
       if (!Number.isInteger(b.score) || b.score < 0) return send(res, 400, { error: "bad score" });
       if (!Number.isInteger(b.streak) || b.streak < 0) return send(res, 400, { error: "bad streak" });
-      const r = await answerChallenge(b.playerId, b.id, b.score, b.streak);
+      const r = await playChallenge(b.playerId, b.id, b.score, b.streak);
       if (r.error) return send(res, r.status, { error: r.error });
-      return send(res, 200, { ok: true });
+      return send(res, 200, r);
     }
 
     return send(res, 404, { error: "no such endpoint" });
