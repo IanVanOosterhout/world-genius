@@ -13,3 +13,4 @@ build/sat/
 World_Genius_Session_Log.md
 
 .DS_Store
+server/node_modules/
