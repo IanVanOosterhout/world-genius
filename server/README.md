@@ -12,13 +12,22 @@ from finished rounds submitted by players.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET`  | `/health` | Liveness, and whether the database is reachable |
+| `POST` | `/v1/name` | Claim a name; 409 if someone else holds it |
 | `POST` | `/v1/score` | Submit a finished round |
-| `GET`  | `/v1/board` | Read a board: `scope=world\|crew`, `mode`, `len`, `reg`, optional `crew`, `playerId` |
-| `POST` | `/v1/crew` | Create a crew, returns its code |
-| `POST` | `/v1/crew/join` | Join a crew by code |
+| `GET`  | `/v1/board` | Read a board: `scope=world\|friends`, `mode`, `len`, `reg`, `playerId` |
+| `GET`  | `/v1/friends` | List the friends you have added |
+| `POST` | `/v1/friends` | Add a friend by name |
+| `POST` | `/v1/challenge` | Send a challenge: the round you played, and the questions in it |
+| `GET`  | `/v1/challenges` | Challenges waiting for you, sent by you, and settled |
+| `POST` | `/v1/challenge/result` | Answer a challenge you were sent |
 
-A player is identified by a random id the browser generates and keeps, not by their name, so two
-people can share a name and one person can rename themselves without splitting or merging rows.
+A player is identified by a random id the browser generates and keeps, not by their name, so
+renaming yourself keeps your scores and your challenges. Names are unique because a friend finds
+you by typing one; adding is one-directional and needs no permission.
+
+A challenge carries its question set as `{iso, clue}` per question. The clue index is what makes a
+fact round reproducible: without it the opponent would meet the same countries but different
+questions, which is not the same round.
 
 ## What it does not do
 

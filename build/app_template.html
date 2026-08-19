@@ -54,6 +54,16 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .resume .rz b{display:block;font-size:15px;font-weight:700}
 .resume .rz small{display:block;color:var(--dim);font-size:12.5px;margin-top:3px;line-height:1.4}
 .resume .btn{flex:0 0 auto;padding:10px 16px;font-size:14px}
+/* Challenges waiting, and the last few settled. Hidden entirely when there are none. */
+.challenges{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.challenges h3{margin:0 0 11px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.ch{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.ch:first-of-type{border-top:none;padding-top:0}
+.ch .cz{flex:1;min-width:0}
+.ch .cz b{display:block;font-size:14.5px;font-weight:700}
+.ch .cz small{display:block;color:var(--dim);font-size:12px;margin-top:3px;line-height:1.4}
+.ch .btn{flex:0 0 auto;padding:9px 18px;font-size:14px}
+.ch.done .cz b{color:var(--dim);font-weight:600;font-size:13.5px}
 .modes{display:flex;flex-direction:column;gap:14px}
 .mode{
   display:flex;align-items:center;gap:16px;text-align:left;width:100%;
@@ -296,16 +306,20 @@ svg#map.grabbing{cursor:grabbing}
 .lb-empty{padding:26px 18px;text-align:center;color:var(--dim);font-size:13.5px;line-height:1.6}
 .lb-status{padding:26px 18px;text-align:center;color:var(--dim);font-size:13.5px;line-height:1.6}
 .lb-status small{display:block;color:var(--faint);font-size:12px;margin-top:6px}
-/* Crew: the shareable code that makes a Friends board a Friends board. */
+/* Friends: who is on your board, and the box that puts them there. */
 .crewbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
 .crewbox h3{margin:0 0 6px;font-size:15px;font-weight:700}
 .crewbox p{margin:0 0 13px;color:var(--dim);font-size:12.5px;line-height:1.5}
-.crewcode{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:12px 14px}
-.crewcode b{flex:1;font-size:22px;font-weight:800;letter-spacing:.16em;font-variant-numeric:tabular-nums}
-.crewcode button{flex:0 0 auto;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+.frlist{display:flex;flex-direction:column;gap:8px;margin-bottom:13px}
+.fr{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.fr b{flex:1;min-width:0;font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr .chal{flex:0 0 auto;padding:7px 13px;border-radius:8px;font-size:13px;font-weight:700;
+  background:rgba(78,168,255,.14);color:var(--accent);border:1px solid rgba(78,168,255,.35)}
+.fr .chal:hover{background:rgba(78,168,255,.24)}
+.crewbox .none{margin:0 0 13px;color:var(--faint);font-size:12.5px;line-height:1.5}
 .crewrow{display:flex;gap:8px}
 .crewrow input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;
-  font:inherit;font-size:16px;color:var(--ink);outline:none;text-transform:uppercase;letter-spacing:.12em}
+  font:inherit;font-size:16px;color:var(--ink);outline:none}
 .crewrow input:focus{border-color:var(--accent)}
 .crewrow button{flex:0 0 auto;padding:11px 16px;border-radius:10px;font-size:14px;font-weight:700;background:var(--accent);color:#04101f}
 .crewbox .alt{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
@@ -354,6 +368,8 @@ svg#map.grabbing{cursor:grabbing}
         <button id="switchBtn">Switch</button>
         <button class="lead" id="boardBtn">Leaderboard</button>
       </div>
+
+      <div class="challenges" id="chalCard" hidden></div>
 
       <div class="resume" id="resumeCard" hidden>
         <div class="rz">
@@ -513,7 +529,7 @@ svg#map.grabbing{cursor:grabbing}
         <button role="radio" data-bmode="capital">Capital</button>
       </div>
       <p class="board-sub" id="boardSub"></p>
-      <div class="crewbox" id="crewBox" hidden></div>
+      <div class="crewbox" id="friendsBox" hidden></div>
       <div class="lb" id="lbList"></div>
       <button class="btn ghost" id="boardPlay" style="flex:none">Play this mode</button>
     </div>
@@ -686,8 +702,8 @@ if(!/^[0-9a-f]{16,64}$/.test(pid)){
   pid = Array.from(b, x => x.toString(16).padStart(2,"0")).join("");
   store.set("pid", pid);
 }
-let crew = store.get("crew", "");
-if(typeof crew !== "string" || !/^[A-HJ-NP-Z2-9]{6}$/.test(crew)) crew = "";
+let friends = [];        // filled from the server; the friends board is never local
+let challenges = { waiting: [], sent: [], done: [] };
 
 async function api(path, opts){
   const ctl = new AbortController();
@@ -732,6 +748,34 @@ function setPlayer(name){
   store.set("player", player);
   store.set("players", players);
   migrateBest(name);
+}
+
+/* A friend adds you by typing your name, so a name has to belong to one player. The server is
+   the only thing that can say whether it is free, which is why this is the one place the game
+   waits on the network. Offline it goes ahead anyway: the round still plays, and the name is
+   claimed the next time something reaches the server. */
+async function claimName(name){
+  try{
+    await apiPost("/v1/name", { playerId:pid, name });
+    return { ok:true };
+  }catch(e){
+    if(e && e.message === "name taken") return { ok:false, taken:true };
+    return { ok:true, offline:true };
+  }
+}
+
+async function loadFriends(){
+  const r = await api("/v1/friends?playerId=" + pid);
+  friends = Array.isArray(r.friends) ? r.friends : [];
+  return friends;
+}
+async function loadChallenges(){
+  const r = await api("/v1/challenges?playerId=" + pid);
+  challenges = {
+    waiting: Array.isArray(r.waiting) ? r.waiting : [],
+    sent:    Array.isArray(r.sent)    ? r.sent    : [],
+    done:    Array.isArray(r.done)    ? r.done    : [] };
+  return challenges;
 }
 
 /* ===== Build map ===== */
@@ -1131,7 +1175,12 @@ function handleTap(cx, cy){
 
 /* ===== Game state ===== */
 const ALL_ISO = MAP.playable.map(c=>c.iso).filter(i=>C[i]);
-const state = { mode:"fact", reg:"all", queue:[], i:0, score:0, streak:0, bestStreak:0, sel:null, log:[], phase:"idle", clue:0 };
+/* `challenge` is null for an ordinary round. Sending one records the exact questions asked so
+   the opponent can be given the identical round; answering one replays those questions instead
+   of drawing fresh ones. `clues` is the clue index used per question, which is what makes a fact
+   round reproducible rather than merely the same countries. */
+const state = { mode:"fact", reg:"all", queue:[], i:0, score:0, streak:0, bestStreak:0, sel:null,
+                log:[], phase:"idle", clue:0, clues:[], challenge:null };
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function pool(){
@@ -1209,14 +1258,36 @@ function loadRound(){
   return r;
 }
 
-function startRound(mode){
-  state.mode=mode; state.reg=settings.reg; state.i=0; state.score=0; state.streak=0; state.bestStreak=0; state.log=[];
-  const p = shuffle(pool());
-  const n = Math.min(settings.len, p.length);
-  state.queue = p.slice(0,n);
+function startRound(mode, challenge){
+  state.mode=mode; state.reg=settings.reg; state.i=0; state.score=0; state.streak=0; state.bestStreak=0;
+  state.log=[]; state.clues=[]; state.challenge=challenge||null;
+  if(challenge && challenge.answering){
+    // The set is already decided: same countries, same order, same clues.
+    state.reg = challenge.reg;
+    state.queue = challenge.questions.map(q=>q.iso).filter(i=>C[i]);
+  }else{
+    const p = shuffle(pool());
+    state.queue = p.slice(0, Math.min(settings.len, p.length));
+  }
   show("game");
   resetView();
   nextQuestion();
+}
+
+/* Sending a challenge posts the round just played along with the questions in it. Answering one
+   posts only the score, because the questions are already on the server. */
+function submitChallenge(){
+  const c = state.challenge;
+  if(!c || !player) return;
+  if(c.answering){
+    apiPost("/v1/challenge/result", { playerId:pid, id:c.id, score:state.score, streak:state.bestStreak })
+      .catch(()=>{});
+  }else{
+    const questions = state.queue.map((iso,i)=>({ iso, clue: state.clues[i]|0 }));
+    apiPost("/v1/challenge", { playerId:pid, name:player, toName:c.toName, mode:state.mode,
+      len:state.queue.length, reg:state.reg, questions, score:state.score, streak:state.bestStreak })
+      .catch(()=>{});
+  }
 }
 
 function resumeRound(){
@@ -1258,7 +1329,11 @@ function nextQuestion(resuming){
   $("progBar").style.width = (state.i/state.queue.length*100)+"%";
 
   if(state.mode==="fact"){
-    if(!resuming) state.clue = pickClue(iso);
+    // Answering a challenge means meeting the clue the challenger met, not a fresh draw.
+    if(!resuming){
+      const fixed = state.challenge && state.challenge.answering && state.challenge.questions[state.i];
+      state.clue = fixed ? fixed.clue : pickClue(iso);
+    }
     const f = c.f[state.clue] || c.f[0];
     $("prompt").innerHTML = `<p class="qtext">${f}</p>`;
   }else if(state.mode==="capital"){
@@ -1268,6 +1343,7 @@ function nextQuestion(resuming){
     $("prompt").innerHTML =
       `<div class="flagbox"><img id="promptFlag" src="${flagSrc(iso)}" alt="Flag of the country to guess" title="Tap to enlarge"><span>Which country flies this flag? Tap it to enlarge.</span></div>`;
   }
+  state.clues[state.i] = state.clue;
   renderAct();
   if(!resuming){
     saveRound();
@@ -1383,6 +1459,7 @@ function finish(){
   const prev = bestScore(state.mode,n,state.reg)||0;
   recordRound();
   submitRound();
+  if(state.challenge) submitChallenge();
   state.phase="idle";
   dropRound();
   const pct = Math.round(s/n*100);
@@ -1392,13 +1469,23 @@ function finish(){
   $("rBest").textContent=(bestScore(state.mode,n,state.reg)||0)+"/"+n;
   const grades=[[90,"World Genius &#127942;"],[75,"Globetrotter &#9992;"],[55,"Solid navigator &#129517;"],[35,"Getting your bearings &#128506;"],[0,"Room to explore &#127760;"]];
   $("rGrade").innerHTML = grades.find(g=>pct>=g[0])[1];
-  // Where the round leaves them on the board for the setup they just played.
-  const rows = boardRows(state.mode,n,state.reg);
-  const pos = rows.findIndex(e=>same(e.name,player));
-  $("rSub").textContent =
-    (s>prev && s>0 ? "New personal best! " : "") +
-    `${MODE_SHORT[state.mode]} Mode · ${state.reg==="all"?"World":state.reg}` +
-    (rows.length>1 && pos>=0 ? ` · ${ord(pos+1)} of ${rows.length} here` : "");
+  const ch = state.challenge;
+  if(ch && ch.answering){
+    // Both halves of the same question set, so the comparison is the whole point of the screen.
+    $("rSub").textContent = s > ch.theirScore ? `You beat ${ch.opponent}, ${s} to ${ch.theirScore}.`
+      : s < ch.theirScore ? `${ch.opponent} wins, ${ch.theirScore} to ${s}.`
+      : `A draw with ${ch.opponent}, ${s} each.`;
+  }else if(ch){
+    $("rSub").textContent = `Challenge sent to ${ch.toName}. They answer the same ${n} questions.`;
+  }else{
+    // Where the round leaves them on the board for the setup they just played.
+    const rows = boardRows(state.mode,n,state.reg);
+    const pos = rows.findIndex(e=>same(e.name,player));
+    $("rSub").textContent =
+      (s>prev && s>0 ? "New personal best! " : "") +
+      `${MODE_SHORT[state.mode]} Mode · ${state.reg==="all"?"World":state.reg}` +
+      (rows.length>1 && pos>=0 ? ` · ${ord(pos+1)} of ${rows.length} here` : "");
+  }
   $("rReview").innerHTML = state.log.map(r=>{
     const a=C[r.ans];
     return `<div class="rev">
@@ -1439,7 +1526,7 @@ function paintPlayer(){
 /* The board shows one setup at a time, the one selected on the home screen, because a score is
    only worth comparing against the same mode, the same number of questions and the same region.
    Its own tabs pick the mode, since that is the one people flip between, and its scope picks how
-   far the comparison reaches: this device, a crew, or everyone. */
+   far the comparison reaches: this device, your friends, or everyone. */
 let boardMode = "fact";
 let boardScope = "local";
 // A slow answer for a board nobody is looking at any more must not paint over a newer one.
@@ -1454,7 +1541,7 @@ function boardRow(e, i, len){
   </div>`;
 }
 function boardEmpty(len, regName){
-  const where = boardScope === "local" ? "on this device" : boardScope === "friends" ? "in your crew" : "anywhere";
+  const where = boardScope === "local" ? "on this device" : boardScope === "friends" ? "among your friends" : "anywhere";
   return `<div class="lb-empty">Nobody ${where} has finished a ${MODE_SHORT[boardMode].toLowerCase()} round of ${len} questions${settings.reg==="all"?"":" in "+regName} yet.<br>Play one to open the board.</div>`;
 }
 
@@ -1464,7 +1551,7 @@ function paintBoard(){
   const len = settings.len, reg = settings.reg, regName = reg==="all" ? "World" : reg;
   $("boardSub").textContent =
     `${len} questions · ${regName}. Change the round length or region on the home screen for the other boards.`;
-  paintCrew();
+  paintFriends();
 
   if(boardScope === "local"){
     const rows = boardRows(boardMode, len, reg).map(e => ({
@@ -1473,16 +1560,10 @@ function paintBoard(){
     $("lbList").innerHTML = rows.length ? rows.map((e,i)=>boardRow(e,i,len)).join("") : boardEmpty(len, regName);
     return;
   }
-  // A crew board with no crew yet has nothing to show and nothing to say: the panel above it is
-  // the whole answer.
-  if(boardScope === "friends" && !crew){ $("lbList").hidden = true; $("lbList").innerHTML = ""; return; }
-
   const my = ++boardReq;
   $("lbList").hidden = false;
   $("lbList").innerHTML = `<div class="lb-status">Loading the board…</div>`;
-  const q = new URLSearchParams({ scope: boardScope==="friends" ? "crew" : "world",
-    mode:boardMode, len:String(len), reg, playerId:pid });
-  if(boardScope === "friends") q.set("crew", crew);
+  const q = new URLSearchParams({ scope: boardScope, mode:boardMode, len:String(len), reg, playerId:pid });
   api("/v1/board?" + q.toString()).then(res => {
     if(my !== boardReq) return;
     const rows = Array.isArray(res.rows) ? res.rows : [];
@@ -1496,38 +1577,32 @@ function paintBoard(){
   });
 }
 
-/* The crew panel: a code to hand round, or a box to type one into. Shown only under Friends,
-   because it is the only scope it means anything for. */
-function paintCrew(){
-  const box = $("crewBox");
+/* The friends panel: who is on your board, and the box that puts someone there. A friend is
+   added by typing their name, which is why names are unique on the server. Each one carries the
+   button that starts a challenge against them. */
+function paintFriends(){
+  const box = $("friendsBox");
   if(boardScope !== "friends"){ box.hidden = true; return; }
   box.hidden = false;
-  box.innerHTML = crew
-    ? `<h3>Your crew</h3>
-       <p>Send this code to a friend. Anyone who enters it shares this board, whatever device they play on.</p>
-       <div class="crewcode"><b>${esc(crew)}</b><button type="button" id="crewCopy">Copy</button></div>
-       <div class="alt">
-         <p>Or join a different crew.</p>
-         <div class="crewrow">
-           <input id="crewInput" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false" aria-label="Crew code">
-           <button type="button" id="crewJoin">Join</button>
-         </div>
-       </div>
-       <p class="note" id="crewNote"></p>`
-    : `<h3>Play against your friends</h3>
-       <p>A crew is a private board. Start one and share the code, or enter a code someone sent you.</p>
-       <div class="crewrow">
-         <input id="crewInput" maxlength="6" placeholder="ENTER A CODE" autocomplete="off" spellcheck="false" aria-label="Crew code">
-         <button type="button" id="crewJoin">Join</button>
-       </div>
-       <div class="alt"><button class="btn" type="button" id="crewMake" style="width:100%">Start a crew</button></div>
-       <p class="note" id="crewNote"></p>`;
+  const list = friends.length
+    ? friends.map(f => `<div class="fr">
+        <b>${esc(f.name)}</b>
+        <button type="button" class="chal" data-challenge="${esc(f.name)}">Challenge</button>
+      </div>`).join("")
+    : `<p class="none">Nobody yet. Add a friend by their name and they appear on this board.</p>`;
+  box.innerHTML =
+    `<h3>Your friends</h3>
+     <div class="frlist">${list}</div>
+     <div class="crewrow">
+       <input id="friendInput" maxlength="14" placeholder="Their name" autocomplete="off" spellcheck="false" aria-label="Friend's name">
+       <button type="button" id="friendAdd">Add</button>
+     </div>
+     <p class="note" id="friendNote"></p>`;
 }
-function crewNote(msg, good){
-  const n = $("crewNote");
+function friendNote(msg, good){
+  const n = $("friendNote");
   if(n){ n.textContent = msg; n.classList.toggle("good", !!good); }
 }
-
 function showBoard(mode){
   boardMode = MODE_LABEL[mode] ? mode : "fact";
   paintBoard();
@@ -1555,11 +1630,11 @@ $("styleSeg").onclick = e=>{
 $("zoomRng").oninput = e=>{ settings.zoomSens=+e.target.value; store.set("zoomSens",settings.zoomSens); paintSettings(); };
 $("assistSw").onclick = ()=>{ settings.assist=!settings.assist; store.set("assist",settings.assist); paintSettings(); if(state.phase==="answering") renderAct(); };
 for(const b of document.querySelectorAll(".mode")) b.onclick = ()=>startRound(b.dataset.mode);
-function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); paintPlayer(); }
+function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); paintPlayer(); paintChallenges(); refreshSocial(); }
 $("quitBtn").onclick = goHome;
 $("resumeBtn").onclick = resumeRound;
 $("resumeDrop").onclick = dropRound;
-$("againBtn").onclick = ()=>startRound(state.mode);
+$("againBtn").onclick = ()=>startRound(state.mode);   // always an ordinary round, never a re-send
 $("homeBtn").onclick = goHome;
 $("boardBtn").onclick = ()=>showBoard(state.mode);
 $("rBoardBtn").onclick = ()=>showBoard(state.mode);
@@ -1567,49 +1642,75 @@ $("boardBack").onclick = goHome;
 $("boardSeg").onclick = e=>{ const b=e.target.closest("button"); if(!b)return; boardMode=b.dataset.bmode; paintBoard(); };
 $("scopeSeg").onclick = e=>{ const b=e.target.closest("button"); if(!b)return; boardScope=b.dataset.scope; paintBoard(); };
 
-/* Crew panel. Both actions name the player, so someone who creates or joins a crew appears on it
-   straight away rather than only once they have finished a round. */
-$("crewBox").onclick = async e => {
+/* Adding a friend, and starting a challenge against one. */
+$("friendsBox").onclick = async e => {
   const b = e.target.closest("button");
   if(!b) return;
 
-  if(b.id === "crewCopy"){
-    try{ await navigator.clipboard.writeText(crew); crewNote("Code copied.", true); }
-    catch(err){ crewNote("Could not copy. The code is above, read it out."); }
+  if(b.dataset.challenge){
+    // A challenge is an ordinary round that happens to be recorded and sent when it ends.
+    startRound(boardMode, { answering:false, toName:b.dataset.challenge });
     return;
   }
 
-  if(b.id === "crewMake"){
-    b.disabled = true; crewNote("Starting a crew…");
+  if(b.id === "friendAdd"){
+    const input = $("friendInput");
+    const name = cleanName(input ? input.value : "");
+    if(!name){ friendNote("Type your friend's name."); return; }
+    if(same(name, player)){ friendNote("That is you."); return; }
+    b.disabled = true; friendNote("Adding…");
     try{
-      const r = await apiPost("/v1/crew", { playerId:pid, name:player });
-      crew = r.code; store.set("crew", crew);
+      const r = await apiPost("/v1/friends", { playerId:pid, name:player, friend:name });
+      friends = Array.isArray(r.friends) ? r.friends : friends;
       paintBoard();
-      crewNote("Crew started. Share the code.", true);
+      friendNote(`${r.friend.name} added.`, true);
     }catch(err){
       b.disabled = false;
-      crewNote("Could not reach the server. Try again when you are online.");
-    }
-    return;
-  }
-
-  if(b.id === "crewJoin"){
-    const input = $("crewInput");
-    const code = (input ? input.value : "").toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "");
-    if(code.length !== 6){ crewNote("A crew code is six letters and numbers."); return; }
-    b.disabled = true; crewNote("Joining…");
-    try{
-      const r = await apiPost("/v1/crew/join", { playerId:pid, name:player, code });
-      crew = r.code; store.set("crew", crew);
-      paintBoard();
-      crewNote(`Joined. ${r.members} player${r.members===1?"":"s"} on this board.`, true);
-    }catch(err){
-      b.disabled = false;
-      crewNote(err && err.message === "no such crew" ? "No crew with that code." : "Could not reach the server.");
+      friendNote(err && err.message === "no such player"
+        ? `Nobody is playing under the name ${name}.`
+        : "Could not reach the server.");
     }
   }
 };
-$("boardPlay").onclick = ()=>startRound(boardMode);
+
+/* Challenges waiting on the home screen. Only shown when there are any, so an ordinary visit is
+   unchanged. */
+function paintChallenges(){
+  const card = $("chalCard");
+  const w = challenges.waiting, d = challenges.done;
+  if(!w.length && !d.length){ card.hidden = true; return; }
+  card.hidden = false;
+  const rows = w.map(c => `<div class="ch">
+      <div class="cz"><b>${esc(c.from)} challenged you</b>
+        <small>${MODE_SHORT[c.mode]} Mode · ${c.len} questions · they scored ${c.theirScore}/${c.len}</small></div>
+      <button class="btn" type="button" data-play="${esc(c.id)}">Play</button>
+    </div>`).join("");
+  const recent = d.slice(0,3).map(c => {
+    const verdict = c.yourScore > c.theirScore ? "You won" : c.yourScore < c.theirScore ? `${esc(c.opponent)} won` : "A draw";
+    return `<div class="ch done">
+      <div class="cz"><b>${verdict}</b>
+        <small>vs ${esc(c.opponent)} · ${c.yourScore}&ndash;${c.theirScore} · ${MODE_SHORT[c.mode]} Mode</small></div>
+    </div>`;
+  }).join("");
+  card.innerHTML = `<h3>Challenges</h3>${rows}${recent}`;
+}
+
+$("chalCard").onclick = e => {
+  const b = e.target.closest("button[data-play]");
+  if(!b) return;
+  const c = challenges.waiting.find(x => x.id === b.dataset.play);
+  if(!c) return;
+  startRound(c.mode, { answering:true, id:c.id, questions:c.questions, reg:c.reg,
+                       opponent:c.from, theirScore:c.theirScore });
+};
+
+/* Everything the home screen shows about other people needs the network, and none of it may hold
+   up the game: a failure leaves the cards hidden and the rest of the screen exactly as it was. */
+function refreshSocial(){
+  if(!player) return;
+  loadChallenges().then(paintChallenges).catch(()=>{});
+  loadFriends().then(()=>{ if($("board").classList.contains("on")) paintBoard(); }).catch(()=>{});
+}$("boardPlay").onclick = ()=>startRound(boardMode);
 
 /* ===== Name gate =====
    Two ways in: the first visit, where there is no way past it, and the Switch button, where the
@@ -1638,15 +1739,25 @@ function openGate(mode){
   if(!COARSE) $("gateInput").focus();
 }
 function closeGate(){ gate.classList.remove("on"); gate.hidden = true; }
-function chooseName(raw){
+async function chooseName(raw){
   const n = cleanName(raw);
   if(!n){ $("gateErr").textContent = "Enter a name to play."; $("gateInput").focus(); return; }
-  // Typing a name that is already known picks that player up rather than starting a second row
-  // for them under a different capitalisation.
+  $("gateErr").textContent = "";
+  $("gateGo").disabled = true;
+  // A friend adds you by typing this, so it has to be yours alone. Offline the claim is deferred
+  // rather than refused: the round matters more than the name.
+  const claim = await claimName(n);
+  $("gateGo").disabled = false;
+  if(!claim.ok){
+    $("gateErr").textContent = "Someone is already playing under that name. Pick another.";
+    $("gateInput").focus();
+    return;
+  }
   const known = players.find(m=>same(m,n));
   setPlayer(known || n);
   closeGate();
   goHome();
+  refreshSocial();
 }
 $("gateGo").onclick = ()=>chooseName($("gateInput").value);
 $("gateCancel").onclick = closeGate;
@@ -1699,6 +1810,7 @@ paintPlayer();
 resetView();
 if(!player) openGate("first");
 flushPending();
+refreshSocial();
 </script>
 </body>
 </html>

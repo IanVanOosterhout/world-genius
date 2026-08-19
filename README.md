@@ -80,36 +80,38 @@ by whoever got there first.
 
 The board has three reaches, chosen at the top of the leaderboard screen.
 
-- **This device** is `localStorage` only: whoever has played in that browser, one phone or laptop
-  passed round a table. It needs no network and never fails.
-- **Friends** is a crew: a private board behind a six-character code. Start one, send the code to
-  whoever you want on it, and everyone who enters it shares the board whatever device they play
-  on. The code leaves out the glyphs that get misread aloud, so there is no O against 0 or I
-  against 1.
+- **This device** is `localStorage` only: whoever has played in that browser. It needs no network
+  and never fails.
+- **Friends** is the people you have added, and you. Add someone by typing their name.
 - **World** is everyone who has ever played.
 
-Friends and World are served by the API in `server/`. The game submits a round to it after
-storing the round locally, never before, so **the network is never in the way of playing**. A
-round finished offline is queued and goes up behind the next one that gets through, and if the
-server cannot be reached the board says so and says plainly that nothing has been lost.
+Because a friend is found by typing their name, **names are unique**. The first person to claim
+one keeps it, and anyone else is asked to pick another. Adding is one-directional: putting someone
+on your board does not put you on theirs, and does not need their permission.
 
-Identity on the server is a random id the browser generates once, not your name. Two friends can
-share a name, and either can rename themselves, without their rows merging or splitting.
+## Challenge a friend
+
+Open the leaderboard, go to **Friends**, and press **Challenge** beside a name. You play a round
+there and then, and it is sent with the exact questions you were asked. Your friend gets it on
+their home screen and answers **the identical set**: same countries, same order, and in Fact Mode
+the same clue out of that country's ten, so neither of you gets an easier round. When they finish,
+both of you see the head to head.
+
+A challenge is also an ordinary round: it counts towards your personal best and your place on the
+boards, the same as any other.
+
+Identity on the server is a random id the browser generates once, not your name, so renaming
+yourself keeps your scores and your challenges.
 
 **A public board is only as honest as the people on it.** The game runs entirely in the page, so
 anyone who opens the developer console can post a score they did not earn. The server refuses
 anything the game could not have produced and rate-limits submissions, which stops accidents and
-idle tampering but not a determined faker. The Friends board, shared only with people you know, is
-the one that stays meaningful. Fixing that properly would mean accounts and serving questions
-from the server, which would cost the game its offline-first single-file design.
+idle tampering but not a determined faker. Fixing that properly would mean serving questions from
+the server, which would cost the game its offline-first single-file design.
 
-Scores, best streaks and personal bests are kept per player and per mode/length/region in
-`localStorage`.
-
-An unfinished round is saved too, on every tap and every answer. Reload, close the tab or quit
-with the X and the home screen offers it back with a **Resume** button, on the same question with
-the same clue, score and streak. Starting a new round replaces it; finishing one clears it. Only a
-finished round can set a personal best, which is what makes resuming worth having.
+Playing never waits on the network. A round is scored and stored locally first and submitted
+after, so a failure costs nothing: unsent rounds queue and go up behind the next one that gets
+through.
 
 ## Rebuilding
 

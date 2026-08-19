@@ -2,17 +2,17 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { pool, migrate } from "./db.js";
 import {
-  cleanName, validPlayerId, validCrewCode, validRound, validQuery, CREW_ALPHABET,
+  cleanName, validPlayerId, validChallengeId, validQuestions,
+  validRound, validQuery, validSetup, validResult,
 } from "./validate.js";
 
 const PORT = process.env.PORT || 3000;
 const BOARD_LIMIT = 100;
-const BODY_MAX = 4096;
+const BODY_MAX = 8192;   // a 20-question challenge carries its whole question set
 
-/* The game is served from GitHub Pages and opened from a file during development, so the API is
+/* The game is served from GitHub Pages and from a local server during development, so the API is
    reachable cross-origin by design. It holds no credentials and no cookies: every request
-   carries its own player id, so there is no session for another site to ride on, and the
-   allowlist is about keeping the surface named rather than defending a secret. */
+   carries its own player id, so there is no session for another site to ride on. */
 const ORIGINS = new Set([
   "https://ianvanoosterhout.github.io",
   "http://localhost:8731",
@@ -29,9 +29,8 @@ function cors(req, res) {
 }
 
 function send(res, status, body) {
-  const out = JSON.stringify(body);
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
-  res.end(out);
+  res.end(JSON.stringify(body));
 }
 
 function readBody(req) {
@@ -40,8 +39,6 @@ function readBody(req) {
     const chunks = [];
     req.on("data", (c) => {
       n += c.length;
-      // A body this size is already far past anything the game sends; stop reading rather than
-      // buffer whatever arrives.
       if (n > BODY_MAX) { reject(new Error("body too large")); req.destroy(); return; }
       chunks.push(c);
     });
@@ -58,7 +55,7 @@ function readBody(req) {
    database, not to defend a score: a restart clears it and a second instance would keep its own.
    Both are fine for what it is protecting. */
 const hits = new Map();
-const RATE = { window: 60_000, max: 60 };
+const RATE = { window: 60_000, max: 90 };
 function rateLimited(key) {
   const now = Date.now();
   const e = hits.get(key);
@@ -72,27 +69,34 @@ setInterval(() => {
 }, RATE.window).unref();
 
 function clientKey(req) {
-  // Railway terminates TLS in front of the app, so the caller's address is in the forwarded
-  // header; the socket address is the proxy's.
   const fwd = req.headers["x-forwarded-for"];
   return (typeof fwd === "string" && fwd.split(",")[0].trim()) || req.socket.remoteAddress || "?";
 }
 
-async function upsertPlayer(client, id, name) {
-  await client.query(
+/* Claiming a name.
+
+   The name is how a friend finds you, so it has to point at one player, but identity is still the
+   id: renaming yourself keeps your scores and your challenges. A name already held by someone
+   else comes back as a conflict for the player to resolve, not silently suffixed, because a name
+   they did not choose is a name their friends cannot guess. */
+async function claimName(id, name) {
+  const taken = await pool.query("SELECT id FROM players WHERE lower(name) = lower($1)", [name]);
+  if (taken.rowCount && taken.rows[0].id !== id) return { ok: false, error: "name taken" };
+  await pool.query(
     `INSERT INTO players (id, name) VALUES ($1, $2)
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, seen_at = now()`,
     [id, name]
   );
+  return { ok: true, name };
 }
 
-/* Best round per player per setup. The round counter still climbs on a worse round, so the board
-   can show how many rounds a score came out of. */
 async function recordScore(b) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await upsertPlayer(client, b.playerId, cleanName(b.name));
+    const claim = await claimName(b.playerId, cleanName(b.name));
+    // A score still counts when the name is contested; it lands under whatever name the player
+    // already holds, and the client is told to sort the name out.
     const { rows } = await client.query(
       `INSERT INTO scores (player_id, mode, len, reg, score, streak, rounds, at)
        VALUES ($1,$2,$3,$4,$5,$6,1,now())
@@ -106,7 +110,7 @@ async function recordScore(b) {
       [b.playerId, b.mode, b.len, b.reg, b.score, b.streak]
     );
     await client.query("COMMIT");
-    return rows[0];
+    return { best: rows[0], nameTaken: !claim.ok };
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;
@@ -121,13 +125,15 @@ async function readBoard(q) {
   const len = Number(q.len);
   const params = [q.mode, len, q.reg];
   let where = "s.mode = $1 AND s.len = $2 AND s.reg = $3";
-  if (q.scope === "crew") {
-    params.push(q.crew.toUpperCase());
-    where += ` AND s.player_id IN (SELECT player_id FROM crew_members WHERE crew_code = $${params.length})`;
+  if (q.scope === "friends") {
+    params.push(q.playerId);
+    // Your own row belongs on your friends board: a board you are not on is not a comparison.
+    where += ` AND (s.player_id = $${params.length}
+                    OR s.player_id IN (SELECT friend_id FROM friends WHERE player_id = $${params.length}))`;
   }
   params.push(BOARD_LIMIT);
   const { rows } = await pool.query(
-    `SELECT p.name, s.player_id, s.score, s.streak, s.rounds, s.at
+    `SELECT p.name, s.player_id, s.score, s.streak, s.rounds
        FROM scores s JOIN players p ON p.id = s.player_id
       WHERE ${where}
       ORDER BY s.score DESC, s.streak DESC, s.at ASC
@@ -135,70 +141,96 @@ async function readBoard(q) {
     params
   );
   return rows.map((r, i) => ({
-    rank: i + 1,
-    name: r.name,
-    score: r.score,
-    streak: r.streak,
-    rounds: r.rounds,
+    rank: i + 1, name: r.name, score: r.score, streak: r.streak, rounds: r.rounds,
     you: q.playerId ? r.player_id === q.playerId : false,
   }));
 }
 
-function newCrewCode() {
-  const bytes = crypto.randomBytes(6);
-  let out = "";
-  for (const b of bytes) out += CREW_ALPHABET[b % CREW_ALPHABET.length];
-  return out;
+async function addFriend(playerId, myName, friendName) {
+  const claim = await claimName(playerId, myName);
+  const found = await pool.query("SELECT id, name FROM players WHERE lower(name) = lower($1)", [friendName]);
+  if (!found.rowCount) return { error: "no such player", status: 404 };
+  const friend = found.rows[0];
+  if (friend.id === playerId) return { error: "that is you", status: 400 };
+  // One-directional on purpose: adding someone puts them on your board without needing their
+  // permission or their attention, which is the whole point of not having codes.
+  await pool.query(
+    `INSERT INTO friends (player_id, friend_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+    [playerId, friend.id]
+  );
+  return { friend: { name: friend.name }, nameTaken: !claim.ok };
 }
 
-async function createCrew(playerId, name) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await upsertPlayer(client, playerId, name);
-    // 32^6 codes, so a clash is remote, but retrying costs nothing and never returning someone
-    // else's crew matters.
-    let code = null;
-    for (let i = 0; i < 6 && !code; i++) {
-      const t = newCrewCode();
-      const r = await client.query(
-        `INSERT INTO crews (code, created_by) VALUES ($1,$2)
-         ON CONFLICT (code) DO NOTHING RETURNING code`, [t, playerId]);
-      if (r.rowCount) code = t;
-    }
-    if (!code) throw new Error("could not allocate a crew code");
-    await client.query(
-      `INSERT INTO crew_members (crew_code, player_id) VALUES ($1,$2)
-       ON CONFLICT DO NOTHING`, [code, playerId]);
-    await client.query("COMMIT");
-    return code;
-  } catch (e) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw e;
-  } finally {
-    client.release();
-  }
+async function listFriends(playerId) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.name FROM friends f JOIN players p ON p.id = f.friend_id
+      WHERE f.player_id = $1 ORDER BY lower(p.name)`, [playerId]);
+  return rows.map((r) => ({ id: r.id, name: r.name }));
 }
 
-async function joinCrew(playerId, name, code) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const found = await client.query("SELECT code FROM crews WHERE code = $1", [code]);
-    if (!found.rowCount) { await client.query("ROLLBACK"); return null; }
-    await upsertPlayer(client, playerId, name);
-    await client.query(
-      `INSERT INTO crew_members (crew_code, player_id) VALUES ($1,$2)
-       ON CONFLICT DO NOTHING`, [code, playerId]);
-    const n = await client.query("SELECT count(*)::int AS n FROM crew_members WHERE crew_code = $1", [code]);
-    await client.query("COMMIT");
-    return { code, members: n.rows[0].n };
-  } catch (e) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw e;
-  } finally {
-    client.release();
+/* Creating a challenge records the challenger's round at the same time, because a challenge with
+   nothing to beat is not a challenge. The question set travels with it so the opponent meets the
+   identical round, clue for clue. */
+async function createChallenge(b) {
+  const found = await pool.query("SELECT id FROM players WHERE lower(name) = lower($1)", [b.toName]);
+  if (!found.rowCount) return { error: "no such player", status: 404 };
+  const toId = found.rows[0].id;
+  if (toId === b.playerId) return { error: "that is you", status: 400 };
+  const id = crypto.randomBytes(12).toString("hex");
+  await pool.query(
+    `INSERT INTO challenges (id, from_id, to_id, mode, len, reg, questions, from_score, from_streak)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [id, b.playerId, toId, b.mode, b.len, b.reg, JSON.stringify(b.questions), b.score, b.streak]
+  );
+  return { id };
+}
+
+async function answerChallenge(playerId, id, score, streak) {
+  const { rows } = await pool.query("SELECT * FROM challenges WHERE id = $1", [id]);
+  if (!rows.length) return { error: "no such challenge", status: 404 };
+  const c = rows[0];
+  if (c.to_id !== playerId) return { error: "not your challenge", status: 403 };
+  if (c.played_at) return { error: "already played", status: 409 };
+  if (score > c.len || streak > c.len) return { error: "bad score", status: 400 };
+  await pool.query(
+    "UPDATE challenges SET to_score = $2, to_streak = $3, played_at = now() WHERE id = $1",
+    [id, score, streak]
+  );
+  return { ok: true };
+}
+
+/* Everything the challenges screen needs in one call: rounds waiting to be played, and finished
+   ones from either side so both players see the head to head. */
+async function listChallenges(playerId) {
+  const { rows } = await pool.query(
+    `SELECT c.id, c.mode, c.len, c.reg, c.questions, c.from_id, c.to_id,
+            c.from_score, c.from_streak, c.to_score, c.to_streak, c.played_at, c.created_at,
+            pf.name AS from_name, pt.name AS to_name
+       FROM challenges c
+       JOIN players pf ON pf.id = c.from_id
+       JOIN players pt ON pt.id = c.to_id
+      WHERE c.from_id = $1 OR c.to_id = $1
+      ORDER BY c.created_at DESC
+      LIMIT 50`, [playerId]);
+
+  const waiting = [], done = [], sent = [];
+  for (const c of rows) {
+    const mine = c.from_id === playerId;
+    const row = {
+      id: c.id, mode: c.mode, len: c.len, reg: c.reg,
+      from: c.from_name, to: c.to_name,
+      yourScore: mine ? c.from_score : c.to_score,
+      theirScore: mine ? c.to_score : c.from_score,
+      yourStreak: mine ? c.from_streak : c.to_streak,
+      theirStreak: mine ? c.to_streak : c.from_streak,
+      opponent: mine ? c.to_name : c.from_name,
+      youStarted: mine,
+    };
+    if (c.played_at) done.push(row);
+    else if (mine) sent.push(row);
+    else waiting.push(Object.assign({ questions: c.questions, theirScore: c.from_score }, row));
   }
+  return { waiting, sent, done };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -219,13 +251,21 @@ const server = http.createServer(async (req, res) => {
 
     if (rateLimited(clientKey(req))) return send(res, 429, { error: "slow down" });
 
+    if (path === "/v1/name" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!validPlayerId(b.playerId)) return send(res, 400, { error: "bad playerId" });
+      const name = cleanName(b.name);
+      if (!name) return send(res, 400, { error: "bad name" });
+      const r = await claimName(b.playerId, name);
+      return send(res, r.ok ? 200 : 409, r.ok ? { ok: true, name } : { error: "name taken" });
+    }
+
     if (path === "/v1/board" && req.method === "GET") {
       const q = {
         scope: url.searchParams.get("scope") || "world",
         mode: url.searchParams.get("mode"),
         len: url.searchParams.get("len"),
         reg: url.searchParams.get("reg") || "all",
-        crew: (url.searchParams.get("crew") || "").toUpperCase(),
         playerId: url.searchParams.get("playerId") || "",
       };
       const bad = validQuery(q);
@@ -234,37 +274,68 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (path === "/v1/score" && req.method === "POST") {
-      const body = await readBody(req);
-      const bad = validRound(body);
+      const b = await readBody(req);
+      const bad = validRound(b);
       if (bad) return send(res, 400, { error: "bad " + bad });
-      return send(res, 200, { ok: true, best: await recordScore(body) });
+      const r = await recordScore(b);
+      return send(res, 200, { ok: true, best: r.best, nameTaken: r.nameTaken });
     }
 
-    if (path === "/v1/crew" && req.method === "POST") {
-      const body = await readBody(req);
-      if (!validPlayerId(body.playerId)) return send(res, 400, { error: "bad playerId" });
-      const name = cleanName(body.name);
-      if (!name) return send(res, 400, { error: "bad name" });
-      return send(res, 200, { code: await createCrew(body.playerId, name) });
+    if (path === "/v1/friends" && req.method === "GET") {
+      const playerId = url.searchParams.get("playerId") || "";
+      if (!validPlayerId(playerId)) return send(res, 400, { error: "bad playerId" });
+      return send(res, 200, { friends: await listFriends(playerId) });
     }
 
-    if (path === "/v1/crew/join" && req.method === "POST") {
-      const body = await readBody(req);
-      if (!validPlayerId(body.playerId)) return send(res, 400, { error: "bad playerId" });
-      const name = cleanName(body.name);
-      if (!name) return send(res, 400, { error: "bad name" });
-      const code = String(body.code || "").toUpperCase();
-      if (!validCrewCode(code)) return send(res, 400, { error: "bad code" });
-      const joined = await joinCrew(body.playerId, name, code);
-      if (!joined) return send(res, 404, { error: "no such crew" });
-      return send(res, 200, joined);
+    if (path === "/v1/friends" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!validPlayerId(b.playerId)) return send(res, 400, { error: "bad playerId" });
+      const myName = cleanName(b.name), friendName = cleanName(b.friend);
+      if (!myName) return send(res, 400, { error: "bad name" });
+      if (!friendName) return send(res, 400, { error: "bad friend" });
+      const r = await addFriend(b.playerId, myName, friendName);
+      if (r.error) return send(res, r.status, { error: r.error });
+      return send(res, 200, { ok: true, friend: r.friend, friends: await listFriends(b.playerId) });
+    }
+
+    if (path === "/v1/challenge" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!validPlayerId(b.playerId)) return send(res, 400, { error: "bad playerId" });
+      const myName = cleanName(b.name), toName = cleanName(b.toName);
+      if (!myName) return send(res, 400, { error: "bad name" });
+      if (!toName) return send(res, 400, { error: "bad toName" });
+      const setup = validSetup(b);
+      if (setup) return send(res, 400, { error: "bad " + setup });
+      const qs = validQuestions(b.questions, b.len);
+      if (qs) return send(res, 400, { error: "bad " + qs });
+      const result = validResult(b, b.len);
+      if (result) return send(res, 400, { error: "bad " + result });
+      await claimName(b.playerId, myName);
+      const r = await createChallenge(Object.assign({}, b, { toName }));
+      if (r.error) return send(res, r.status, { error: r.error });
+      return send(res, 200, { ok: true, id: r.id });
+    }
+
+    if (path === "/v1/challenges" && req.method === "GET") {
+      const playerId = url.searchParams.get("playerId") || "";
+      if (!validPlayerId(playerId)) return send(res, 400, { error: "bad playerId" });
+      return send(res, 200, await listChallenges(playerId));
+    }
+
+    if (path === "/v1/challenge/result" && req.method === "POST") {
+      const b = await readBody(req);
+      if (!validPlayerId(b.playerId)) return send(res, 400, { error: "bad playerId" });
+      if (!validChallengeId(b.id)) return send(res, 400, { error: "bad id" });
+      if (!Number.isInteger(b.score) || b.score < 0) return send(res, 400, { error: "bad score" });
+      if (!Number.isInteger(b.streak) || b.streak < 0) return send(res, 400, { error: "bad streak" });
+      const r = await answerChallenge(b.playerId, b.id, b.score, b.streak);
+      if (r.error) return send(res, r.status, { error: r.error });
+      return send(res, 200, { ok: true });
     }
 
     return send(res, 404, { error: "no such endpoint" });
   } catch (e) {
     const msg = e && e.message ? e.message : "error";
-    // A malformed or oversized body is the caller's problem; anything else is ours and the
-    // detail stays in the logs.
     if (msg === "body too large" || msg === "body is not JSON") return send(res, 400, { error: msg });
     console.error(req.method, path, msg);
     return send(res, 500, { error: "server error" });

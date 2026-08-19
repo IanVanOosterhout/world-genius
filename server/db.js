@@ -30,17 +30,16 @@ export async function migrate() {
       seen_at     TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
-    CREATE TABLE IF NOT EXISTS crews (
-      code        TEXT PRIMARY KEY,
-      created_by  TEXT REFERENCES players(id) ON DELETE SET NULL,
-      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
+    -- A friend is added by typing their name, so a name has to point at exactly one player.
+    -- Case-insensitive, because nobody remembers how a friend capitalised themselves.
+    CREATE UNIQUE INDEX IF NOT EXISTS players_name_key ON players (lower(name));
 
-    CREATE TABLE IF NOT EXISTS crew_members (
-      crew_code   TEXT NOT NULL REFERENCES crews(code) ON DELETE CASCADE,
+    CREATE TABLE IF NOT EXISTS friends (
       player_id   TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY (crew_code, player_id)
+      friend_id   TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (player_id, friend_id),
+      CHECK (player_id <> friend_id)
     );
 
     -- One row per player per setup, holding their best round of it. Same shape the browser keeps
@@ -57,9 +56,38 @@ export async function migrate() {
       PRIMARY KEY (player_id, mode, len, reg)
     );
 
-    -- Every board query filters on the setup and orders within it.
+    /* A challenge is one fixed set of questions played by two people. the questions column holds the
+       countries in order and, for fact rounds, which of that country's ten clues was shown, so
+       the friend meets the identical round rather than merely the same countries. The challenger
+       always plays first, which is why their score is not nullable and the opponent's is. */
+    CREATE TABLE IF NOT EXISTS challenges (
+      id           TEXT PRIMARY KEY,
+      from_id      TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      to_id        TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      mode         TEXT NOT NULL,
+      len          INTEGER NOT NULL,
+      reg          TEXT NOT NULL,
+      questions    JSONB NOT NULL,
+      from_score   INTEGER NOT NULL,
+      from_streak  INTEGER NOT NULL DEFAULT 0,
+      to_score     INTEGER,
+      to_streak    INTEGER,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      played_at    TIMESTAMPTZ
+    );
+
     CREATE INDEX IF NOT EXISTS scores_board_idx
       ON scores (mode, len, reg, score DESC, streak DESC, at ASC);
-    CREATE INDEX IF NOT EXISTS crew_members_player_idx ON crew_members (player_id);
+    CREATE INDEX IF NOT EXISTS friends_player_idx ON friends (player_id);
+    -- The two lookups the challenges screen makes: what is waiting for me, and what have I sent.
+    CREATE INDEX IF NOT EXISTS challenges_to_idx ON challenges (to_id, played_at);
+    CREATE INDEX IF NOT EXISTS challenges_from_idx ON challenges (from_id, created_at DESC);
+  `);
+
+  // Crews were replaced by friends and challenges. Dropping them keeps the schema honest about
+  // what the game actually does.
+  await pool.query(`
+    DROP TABLE IF EXISTS crew_members;
+    DROP TABLE IF EXISTS crews;
   `);
 }
