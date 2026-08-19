@@ -23,6 +23,9 @@ from finished rounds submitted by players.
 | `GET`  | `/v1/challenges` | Challenges to play, played and waiting on the other, and settled |
 | `POST` | `/v1/challenge/result` | Report your half of a challenge, from either side |
 
+Every response carries the CORS header, refusals included: a 404 without it is invisible to the
+browser, which reports it as a network failure rather than as the answer it is.
+
 A player is identified by a random id the browser generates and keeps, not by their name, so
 renaming yourself keeps your scores and your challenges. Names are unique because a friend finds
 you by typing one. Friendship is mutual: asking creates a request, and accepting writes both
@@ -38,12 +41,29 @@ each score is null until that player has played, `/v1/challenge/result` works ou
 caller is reporting, and whoever finishes second is the one who sees the verdict. The challenger is
 just the person who chose the rules.
 
+## Origins
+
+Any origin is answered, and the reason is worth writing down because the alternative was tried and
+broke the game. The API used to allow three origins: the Pages URL and two localhost ports. A copy
+of the game opened straight off the disk, which is how the top of the main README tells people to
+open it, is a `file://` page whose origin is the string `null`, so it matched nothing.
+
+That failed in the worst way available. A simple `GET` was still sent and answered, and the browser
+discarded the response, so boards looked empty rather than broken. A preflighted request, which is
+every `POST` here, was never sent at all: the log shows the `OPTIONS`, a `204`, and then nothing.
+The player saw "could not reach the server" from a server that was up and healthy.
+
+The list was never protecting anything either. There are no cookies and no credentials; every
+request carries its own random player id, which another site has no way of learning, so there is no
+session to ride on. Anything that is not a browser ignores CORS completely. All the list did was
+decide which copies of the game were allowed to work.
+
 ## What it does not do
 
 It cannot tell a real score from an invented one. Scores arrive from a browser, and anyone who
 opens the developer console can post whatever they like. The server range-checks everything it
 stores (a score cannot exceed the round length, a round length has to be one the game offers) and
-rate-limits submissions, which stops nonsense and accidents but not a determined faker. A crew
-board, shared only with people you know, is the one that stays meaningful. This is a game about
-guessing countries, so that trade is deliberate: the alternative is accounts and server-side
+rate-limits submissions, which stops nonsense and accidents but not a determined faker. The
+Friends board, shared only with people you know, is the one that stays meaningful. This is a game
+about guessing countries, so that trade is deliberate: the alternative is accounts and server-side
 question serving, which would cost the game its offline-first single-file design.

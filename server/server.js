@@ -10,19 +10,20 @@ const PORT = process.env.PORT || 3000;
 const BOARD_LIMIT = 100;
 const BODY_MAX = 8192;   // a 20-question challenge carries its whole question set
 
-/* The game is served from GitHub Pages and from a local server during development, so the API is
-   reachable cross-origin by design. It holds no credentials and no cookies: every request
-   carries its own player id, so there is no session for another site to ride on. */
-const ORIGINS = new Set([
-  "https://ianvanoosterhout.github.io",
-  "http://localhost:8731",
-  "http://127.0.0.1:8731",
-]);
+/* Any origin. This was an allowlist of three, which broke the game in the one way the README
+   actually tells people to run it: "open index.html in a browser" is a file:// page, whose origin
+   is the string "null" and matched nothing, so every networked feature failed silently. A simple
+   GET was sent and its response thrown away by the browser; anything preflighted never left at
+   all, which is what a friend add is. From the player's side that looks exactly like the server
+   being down, and it is not.
 
+   Opening it up costs nothing, because the allowlist was never protecting anything. There are no
+   cookies and no credentials: every request carries its own random player id, which another site
+   has no way of learning, so there is no session for it to ride on. Anything that is not a
+   browser ignores CORS entirely, so the list stopped no attacker either. All it did was decide
+   which copies of the game were allowed to work. */
 function cors(req, res) {
-  const origin = req.headers.origin;
-  if (origin && ORIGINS.has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Max-Age", "86400");

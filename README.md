@@ -6,6 +6,10 @@ name a capital, then find the country by tapping it on a world map.
 **To play: open `index.html` in a browser.** That's it, no server, no install, no internet
 connection. Everything (map geometry, 1,970 clues, all 197 flags) is embedded in that one file.
 
+The shared parts, friends, challenges and the Friends and World boards, do need the internet,
+and they work from a copy opened straight off the disk as well as from a hosted one. They did not
+always: see [Opening it from disk used to break the shared half](#opening-it-from-disk-used-to-break-the-shared-half).
+
 ## Modes
 
 - **Fact Mode**, a clue about what a country is known for: exports, landmarks, food, history,
@@ -133,6 +137,26 @@ head to head with its score, and the ones still open, whether they are waiting o
 
 Identity on the server is a random id the browser generates once, not your name, so renaming
 yourself keeps your scores and your challenges.
+
+### Opening it from disk used to break the shared half
+
+For a while the API only answered browsers on three known origins: the GitHub Pages URL and two
+localhost ports. A copy opened the way this README tells you to open it, straight off the disk, is
+a `file://` page whose origin is the string `null`, which matched none of them.
+
+The failure was quiet and misleading. A plain `GET` still reached the server, which answered
+normally, and the browser then threw the response away, so boards simply looked empty. Anything
+needing a preflight, which is every `POST` the game makes, never left the browser at all. Adding a
+friend reported **"Could not reach the server"** while the server sat there perfectly healthy.
+
+The API now answers any origin. The allowlist was never protecting anything: there are no cookies
+and no credentials, every request carries its own random player id that another site has no way of
+learning, and anything that is not a browser ignores CORS entirely. All it decided was which copies
+of the game were allowed to work.
+
+The client also used to report every failure as "could not reach the server", including refusals
+the server had answered clearly. It now separates not reaching the server from being refused by
+it, and says which.
 
 **A public board is only as honest as the people on it.** The game runs entirely in the page, so
 anyone who opens the developer console can post a score they did not earn. The server refuses

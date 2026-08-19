@@ -797,10 +797,21 @@ async function api(path, opts){
   const ctl = new AbortController();
   const t = setTimeout(()=>ctl.abort(), API_TIMEOUT);
   try{
-    const r = await fetch(API+path, Object.assign({signal:ctl.signal}, opts||{}));
+    let r;
+    try{
+      r = await fetch(API+path, Object.assign({signal:ctl.signal}, opts||{}));
+    }catch(e){
+      /* fetch only rejects when the response never arrived: no network, DNS, TLS, a blocked
+         cross-origin request, or our own abort. Marking it lets the caller say so instead of
+         guessing, and keeps it out of the "the server refused this" path. */
+      const err = new Error(e && e.name === "AbortError" ? "timed out" : "unreachable");
+      err.unreachable = true;
+      throw err;
+    }
     const body = await r.json().catch(()=>({}));
     if(!r.ok){
       const e = new Error(body.error || ("http "+r.status));
+      e.status = r.status;
       // A refusal is the server's final word; only a failure to reach it is worth trying again.
       e.permanent = r.status >= 400 && r.status < 500;
       throw e;
@@ -1800,6 +1811,20 @@ function paintFriends(){
      </div>
      <p class="note" id="friendNote"></p>`;
 }
+/* What went wrong, in the player's terms. Everything used to come out as "could not reach the
+   server", including refusals the server had answered perfectly clearly. */
+function apiWhy(err, fallback){
+  if(!err) return fallback;
+  if(err.unreachable){
+    return err.message === "timed out"
+      ? "The server took too long to answer. Try again in a moment."
+      : "Could not reach the server. Check your connection and try again.";
+  }
+  if(err.status === 429) return "Too many requests just now. Wait a moment and try again.";
+  if(err.status >= 500)  return "The server had a problem with that. Try again in a moment.";
+  return fallback;
+}
+
 function friendNote(msg, good){
   const n = $("friendNote");
   if(n){ n.textContent = msg; n.classList.toggle("good", !!good); }
@@ -1966,7 +1991,7 @@ $("friendsBox").onclick = async e => {
       friendNote(accepting ? "You are friends now." : "Request declined.", accepting);
     }catch(err){
       b.disabled = false;
-      friendNote("Could not reach the server.");
+      friendNote(apiWhy(err, "That could not be answered. Try again in a moment."));
     }
     return;
   }
@@ -1987,9 +2012,10 @@ $("friendsBox").onclick = async e => {
         : `Asked ${r.friend.name}. They appear once they accept.`, true);
     }catch(err){
       b.disabled = false;
-      friendNote(err && err.message === "no such player"
-        ? `Nobody is playing under the name ${name}.`
-        : "Could not reach the server.");
+      friendNote(
+        err && err.message === "no such player" ? `Nobody is playing under the name ${name}.`
+      : err && err.message === "that is you"    ? "That is you."
+      : apiWhy(err, "That name could not be added. Try again in a moment."));
     }
   }
 };
@@ -2126,9 +2152,9 @@ $("csStart").onclick = async ()=>{
     refreshSocial();
   }catch(err){
     cs.busy = false;
-    $("csErr").textContent = err && err.message === "no such player"
-      ? `Nobody is playing under the name ${to}.`
-      : "Could not reach the server. A challenge needs it, so try again in a moment.";
+    $("csErr").textContent =
+        err && err.message === "no such player" ? `Nobody is playing under the name ${to}.`
+      : apiWhy(err, "That challenge could not be created. Try again in a moment.");
     paintChalSetup();
   }
 };
