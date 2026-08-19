@@ -1237,25 +1237,10 @@ function clampLen(){
   settings.len = Math.min(Math.max(1, settings.len), maxLen(settings.reg));
 }
 
-/* Build a round's countries.
-
-   A country is asked once per lap through the region. When a lap runs out before the round does,
-   the region is reshuffled and dealt again rather than the round being cut short: a 20-question
-   round in a 14-country region is 14 countries and then 6 of them again. A second sighting draws
-   a fresh clue, since pickClue works through a country's ten before repeating any.
-
-   The country that ends one lap never opens the next, or it would be asked twice in a row. */
+/* A country is asked at most once per round. Nothing needs to handle a round longer than the
+   region can fill, because the length cannot be set past that: see maxLen and clampLen. */
 function buildQueue(reg, len){
-  const p = regionPool(reg), q = [];
-  while(q.length < len){
-    const lap = shuffle(p.slice());
-    if(q.length && lap.length > 1 && lap[0] === q[q.length-1]) lap.push(lap.shift());
-    for(const iso of lap){
-      if(q.length >= len) break;
-      q.push(iso);
-    }
-  }
-  return q;
+  return shuffle(regionPool(reg).slice()).slice(0, len);
 }
 
 /* ===== Clue rotation =====
