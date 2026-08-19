@@ -76,9 +76,32 @@ the same number of questions and the same region. Its tabs pick the mode; the ro
 region come from the home screen. Ranking is by score, then by the longest streak behind it, then
 by whoever got there first.
 
-Everything is stored in `localStorage`, so a board ranks whoever has played in that browser: one
-device passed round a table. Friends on their own phones each keep their own board, and comparing
-those means comparing screens.
+### This device, Friends, World
+
+The board has three reaches, chosen at the top of the leaderboard screen.
+
+- **This device** is `localStorage` only: whoever has played in that browser, one phone or laptop
+  passed round a table. It needs no network and never fails.
+- **Friends** is a crew: a private board behind a six-character code. Start one, send the code to
+  whoever you want on it, and everyone who enters it shares the board whatever device they play
+  on. The code leaves out the glyphs that get misread aloud, so there is no O against 0 or I
+  against 1.
+- **World** is everyone who has ever played.
+
+Friends and World are served by the API in `server/`. The game submits a round to it after
+storing the round locally, never before, so **the network is never in the way of playing**. A
+round finished offline is queued and goes up behind the next one that gets through, and if the
+server cannot be reached the board says so and says plainly that nothing has been lost.
+
+Identity on the server is a random id the browser generates once, not your name. Two friends can
+share a name, and either can rename themselves, without their rows merging or splitting.
+
+**A public board is only as honest as the people on it.** The game runs entirely in the page, so
+anyone who opens the developer console can post a score they did not earn. The server refuses
+anything the game could not have produced and rate-limits submissions, which stops accidents and
+idle tampering but not a determined faker. The Friends board, shared only with people you know, is
+the one that stays meaningful. Fixing that properly would mean accounts and serving questions
+from the server, which would cost the game its offline-first single-file design.
 
 Scores, best streaks and personal bests are kept per player and per mode/length/region in
 `localStorage`.
