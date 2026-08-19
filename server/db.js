@@ -34,12 +34,23 @@ export async function migrate() {
     -- Case-insensitive, because nobody remembers how a friend capitalised themselves.
     CREATE UNIQUE INDEX IF NOT EXISTS players_name_key ON players (lower(name));
 
+    /* Friendship is mutual and stored as both directions, so a board query never has to look
+       both ways round. Rows are only written once a request has been accepted. */
     CREATE TABLE IF NOT EXISTS friends (
       player_id   TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
       friend_id   TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (player_id, friend_id),
       CHECK (player_id <> friend_id)
+    );
+
+    -- An asked-for friendship that has not been answered yet. Deleted either way it goes.
+    CREATE TABLE IF NOT EXISTS friend_requests (
+      from_id     TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      to_id       TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (from_id, to_id),
+      CHECK (from_id <> to_id)
     );
 
     -- One row per player per setup, holding their best round of it. Same shape the browser keeps
@@ -79,6 +90,7 @@ export async function migrate() {
     CREATE INDEX IF NOT EXISTS scores_board_idx
       ON scores (mode, len, reg, score DESC, streak DESC, at ASC);
     CREATE INDEX IF NOT EXISTS friends_player_idx ON friends (player_id);
+    CREATE INDEX IF NOT EXISTS friend_requests_to_idx ON friend_requests (to_id);
     -- The two lookups the challenges screen makes: what is waiting for me, and what have I sent.
     CREATE INDEX IF NOT EXISTS challenges_to_idx ON challenges (to_id, played_at);
     CREATE INDEX IF NOT EXISTS challenges_from_idx ON challenges (from_id, created_at DESC);

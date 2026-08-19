@@ -146,26 +146,77 @@ async function readBoard(q) {
   }));
 }
 
-async function addFriend(playerId, myName, friendName) {
+/* Asking to be friends. Nothing appears on either board until the other person accepts, except
+   in the one case where they had already asked you: two people who each asked for the same thing
+   have already agreed, so that resolves immediately rather than leaving both waiting. */
+async function requestFriend(playerId, myName, friendName) {
   const claim = await claimName(playerId, myName);
   const found = await pool.query("SELECT id, name FROM players WHERE lower(name) = lower($1)", [friendName]);
   if (!found.rowCount) return { error: "no such player", status: 404 };
   const friend = found.rows[0];
   if (friend.id === playerId) return { error: "that is you", status: 400 };
-  // One-directional on purpose: adding someone puts them on your board without needing their
-  // permission or their attention, which is the whole point of not having codes.
+
+  const already = await pool.query(
+    "SELECT 1 FROM friends WHERE player_id = $1 AND friend_id = $2", [playerId, friend.id]);
+  if (already.rowCount) return { state: "friends", friend: { name: friend.name }, nameTaken: !claim.ok };
+
+  const theirs = await pool.query(
+    "SELECT 1 FROM friend_requests WHERE from_id = $1 AND to_id = $2", [friend.id, playerId]);
+  if (theirs.rowCount) {
+    await acceptFriend(playerId, friend.id);
+    return { state: "friends", friend: { name: friend.name }, nameTaken: !claim.ok };
+  }
+
   await pool.query(
-    `INSERT INTO friends (player_id, friend_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
-    [playerId, friend.id]
-  );
-  return { friend: { name: friend.name }, nameTaken: !claim.ok };
+    `INSERT INTO friend_requests (from_id, to_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+    [playerId, friend.id]);
+  return { state: "requested", friend: { name: friend.name }, nameTaken: !claim.ok };
 }
 
+/* Accepting writes both directions at once, so neither side has to add the other back. */
+async function acceptFriend(playerId, fromId) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const req = await client.query(
+      "DELETE FROM friend_requests WHERE from_id = $1 AND to_id = $2 RETURNING from_id",
+      [fromId, playerId]);
+    if (!req.rowCount) { await client.query("ROLLBACK"); return { error: "no such request", status: 404 }; }
+    await client.query(
+      `INSERT INTO friends (player_id, friend_id) VALUES ($1,$2), ($2,$1) ON CONFLICT DO NOTHING`,
+      [playerId, fromId]);
+    // A request the other way round is now redundant.
+    await client.query(
+      "DELETE FROM friend_requests WHERE from_id = $1 AND to_id = $2", [playerId, fromId]);
+    await client.query("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+async function declineFriend(playerId, fromId) {
+  const r = await pool.query(
+    "DELETE FROM friend_requests WHERE from_id = $1 AND to_id = $2", [fromId, playerId]);
+  return r.rowCount ? { ok: true } : { error: "no such request", status: 404 };
+}
+
+/* Everything the friends panel shows: who you are friends with, who is waiting on you, and who
+   you are waiting on. */
 async function listFriends(playerId) {
-  const { rows } = await pool.query(
-    `SELECT p.id, p.name FROM friends f JOIN players p ON p.id = f.friend_id
-      WHERE f.player_id = $1 ORDER BY lower(p.name)`, [playerId]);
-  return rows.map((r) => ({ id: r.id, name: r.name }));
+  const [mine, incoming, outgoing] = await Promise.all([
+    pool.query(`SELECT p.id, p.name FROM friends f JOIN players p ON p.id = f.friend_id
+                 WHERE f.player_id = $1 ORDER BY lower(p.name)`, [playerId]),
+    pool.query(`SELECT p.id, p.name FROM friend_requests r JOIN players p ON p.id = r.from_id
+                 WHERE r.to_id = $1 ORDER BY r.created_at`, [playerId]),
+    pool.query(`SELECT p.id, p.name FROM friend_requests r JOIN players p ON p.id = r.to_id
+                 WHERE r.from_id = $1 ORDER BY r.created_at`, [playerId]),
+  ]);
+  const map = (q) => q.rows.map((r) => ({ id: r.id, name: r.name }));
+  return { friends: map(mine), incoming: map(incoming), outgoing: map(outgoing) };
 }
 
 /* Creating a challenge records the challenger's round at the same time, because a challenge with
@@ -284,7 +335,7 @@ const server = http.createServer(async (req, res) => {
     if (path === "/v1/friends" && req.method === "GET") {
       const playerId = url.searchParams.get("playerId") || "";
       if (!validPlayerId(playerId)) return send(res, 400, { error: "bad playerId" });
-      return send(res, 200, { friends: await listFriends(playerId) });
+      return send(res, 200, await listFriends(playerId));
     }
 
     if (path === "/v1/friends" && req.method === "POST") {
@@ -293,9 +344,21 @@ const server = http.createServer(async (req, res) => {
       const myName = cleanName(b.name), friendName = cleanName(b.friend);
       if (!myName) return send(res, 400, { error: "bad name" });
       if (!friendName) return send(res, 400, { error: "bad friend" });
-      const r = await addFriend(b.playerId, myName, friendName);
+      const r = await requestFriend(b.playerId, myName, friendName);
       if (r.error) return send(res, r.status, { error: r.error });
-      return send(res, 200, { ok: true, friend: r.friend, friends: await listFriends(b.playerId) });
+      return send(res, 200, Object.assign({ ok: true, state: r.state, friend: r.friend },
+        await listFriends(b.playerId)));
+    }
+
+    if ((path === "/v1/friends/accept" || path === "/v1/friends/decline") && req.method === "POST") {
+      const b = await readBody(req);
+      if (!validPlayerId(b.playerId)) return send(res, 400, { error: "bad playerId" });
+      if (!validPlayerId(b.fromId)) return send(res, 400, { error: "bad fromId" });
+      const r = path.endsWith("accept")
+        ? await acceptFriend(b.playerId, b.fromId)
+        : await declineFriend(b.playerId, b.fromId);
+      if (r.error) return send(res, r.status, { error: r.error });
+      return send(res, 200, Object.assign({ ok: true }, await listFriends(b.playerId)));
     }
 
     if (path === "/v1/challenge" && req.method === "POST") {

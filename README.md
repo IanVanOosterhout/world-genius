@@ -86,8 +86,12 @@ The board has three reaches, chosen at the top of the leaderboard screen.
 - **World** is everyone who has ever played.
 
 Because a friend is found by typing their name, **names are unique**. The first person to claim
-one keeps it, and anyone else is asked to pick another. Adding is one-directional: putting someone
-on your board does not put you on theirs, and does not need their permission.
+one keeps it, and anyone else is asked to pick another.
+
+Friendship is mutual. Adding someone asks them; nothing appears on either board until they accept,
+and when they do you are on each other's board without either of you adding again. Requests wait
+under **Friends**, with Accept and Decline. If you each ask the other, that settles on the spot
+rather than leaving you both waiting.
 
 ## Challenge a friend
 
@@ -96,6 +100,11 @@ there and then, and it is sent with the exact questions you were asked. Your fri
 their home screen and answers **the identical set**: same countries, same order, and in Fact Mode
 the same clue out of that country's ten, so neither of you gets an easier round. When they finish,
 both of you see the head to head.
+
+When a challenge round ends, **Play again** becomes **Rematch**, which sends another challenge to
+the same person on the same setup. The questions are fresh: replaying the identical ones would
+only be a memory test. It keeps the mode, length and region of the round it came from, so a
+rematch stays comparable even if the home screen has been changed since.
 
 A challenge is also an ordinary round: it counts towards your personal best and your place on the
 boards, the same as any other.

@@ -316,6 +316,13 @@ svg#map.grabbing{cursor:grabbing}
 .fr .chal{flex:0 0 auto;padding:7px 13px;border-radius:8px;font-size:13px;font-weight:700;
   background:rgba(78,168,255,.14);color:var(--accent);border:1px solid rgba(78,168,255,.35)}
 .fr .chal:hover{background:rgba(78,168,255,.24)}
+.fr.ask{border-color:rgba(78,168,255,.4)}
+.fr .yes,.fr .no{flex:0 0 auto;padding:7px 12px;border-radius:8px;font-size:13px;font-weight:700;border:1px solid var(--line)}
+.fr .yes{background:rgba(34,197,94,.16);color:var(--good);border-color:rgba(34,197,94,.35)}
+.fr .no{background:var(--panel2);color:var(--dim)}
+.fr.pend b{color:var(--faint);font-weight:600}
+.fr .tag{flex:0 0 auto;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:700}
+.crewbox h3+.frlist{margin-bottom:16px}
 .crewbox .none{margin:0 0 13px;color:var(--faint);font-size:12.5px;line-height:1.5}
 .crewrow{display:flex;gap:8px}
 .crewrow input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;
@@ -703,6 +710,8 @@ if(!/^[0-9a-f]{16,64}$/.test(pid)){
   store.set("pid", pid);
 }
 let friends = [];        // filled from the server; the friends board is never local
+let incoming = [];       // friend requests waiting on you
+let outgoing = [];       // friend requests you are waiting on
 let challenges = { waiting: [], sent: [], done: [] };
 
 async function api(path, opts){
@@ -764,9 +773,13 @@ async function claimName(name){
   }
 }
 
+function takeFriends(r){
+  friends  = Array.isArray(r.friends)  ? r.friends  : [];
+  incoming = Array.isArray(r.incoming) ? r.incoming : [];
+  outgoing = Array.isArray(r.outgoing) ? r.outgoing : [];
+}
 async function loadFriends(){
-  const r = await api("/v1/friends?playerId=" + pid);
-  friends = Array.isArray(r.friends) ? r.friends : [];
+  takeFriends(await api("/v1/friends?playerId=" + pid));
   return friends;
 }
 async function loadChallenges(){
@@ -1183,10 +1196,11 @@ const state = { mode:"fact", reg:"all", queue:[], i:0, score:0, streak:0, bestSt
                 log:[], phase:"idle", clue:0, clues:[], challenge:null };
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function pool(){
-  const p = settings.reg==="all" ? ALL_ISO.slice() : ALL_ISO.filter(i=>C[i].r===settings.reg);
+function regionPool(reg){
+  const p = reg==="all" ? ALL_ISO.slice() : ALL_ISO.filter(i=>C[i].r===reg);
   return p.length ? p : ALL_ISO.slice();
 }
+const pool = () => regionPool(settings.reg);
 
 /* ===== Clue rotation =====
    A country comes up again and again across a sitting, and drawing its clue at random every
@@ -1266,8 +1280,12 @@ function startRound(mode, challenge){
     state.reg = challenge.reg;
     state.queue = challenge.questions.map(q=>q.iso).filter(i=>C[i]);
   }else{
-    const p = shuffle(pool());
-    state.queue = p.slice(0, Math.min(settings.len, p.length));
+    // A rematch carries the setup of the round being answered back, so both halves of a pair are
+    // comparable. Everything else follows the home screen.
+    if(challenge && challenge.reg) state.reg = challenge.reg;
+    const len = challenge && challenge.len ? challenge.len : settings.len;
+    const p = shuffle(regionPool(state.reg));
+    state.queue = p.slice(0, Math.min(len, p.length));
   }
   show("game");
   resetView();
@@ -1469,6 +1487,14 @@ function finish(){
   $("rBest").textContent=(bestScore(state.mode,n,state.reg)||0)+"/"+n;
   const grades=[[90,"World Genius &#127942;"],[75,"Globetrotter &#9992;"],[55,"Solid navigator &#129517;"],[35,"Getting your bearings &#128506;"],[0,"Room to explore &#127760;"]];
   $("rGrade").innerHTML = grades.find(g=>pct>=g[0])[1];
+  // Held past the round so the button still knows who to play again, since starting a new round
+  // clears state.challenge.
+  lastChallenge = state.challenge
+    ? { opponent: state.challenge.answering ? state.challenge.opponent : state.challenge.toName,
+        mode: state.mode, len: n, reg: state.reg }
+    : null;
+  $("againBtn").textContent = lastChallenge ? `Rematch ${lastChallenge.opponent}` : "Play again";
+
   const ch = state.challenge;
   if(ch && ch.answering){
     // Both halves of the same question set, so the comparison is the whole point of the screen.
@@ -1584,15 +1610,29 @@ function paintFriends(){
   const box = $("friendsBox");
   if(boardScope !== "friends"){ box.hidden = true; return; }
   box.hidden = false;
-  const list = friends.length
-    ? friends.map(f => `<div class="fr">
-        <b>${esc(f.name)}</b>
-        <button type="button" class="chal" data-challenge="${esc(f.name)}">Challenge</button>
-      </div>`).join("")
-    : `<p class="none">Nobody yet. Add a friend by their name and they appear on this board.</p>`;
+
+  const asks = incoming.map(f => `<div class="fr ask">
+      <b>${esc(f.name)}</b>
+      <button type="button" class="yes" data-accept="${esc(f.id)}">Accept</button>
+      <button type="button" class="no" data-decline="${esc(f.id)}">Decline</button>
+    </div>`).join("");
+  const list = friends.map(f => `<div class="fr">
+      <b>${esc(f.name)}</b>
+      <button type="button" class="chal" data-challenge="${esc(f.name)}">Challenge</button>
+    </div>`).join("");
+  // Someone you have asked is neither a friend nor an action: shown so you know it was sent.
+  const sent = outgoing.map(f => `<div class="fr pend">
+      <b>${esc(f.name)}</b><span class="tag">asked</span>
+    </div>`).join("");
+  const nothing = !friends.length && !incoming.length && !outgoing.length
+    ? `<p class="none">Nobody yet. Add a friend by their name; once they accept, you are on each other's board.</p>`
+    : "";
+
   box.innerHTML =
-    `<h3>Your friends</h3>
-     <div class="frlist">${list}</div>
+    `${incoming.length ? `<h3>Wants to be friends</h3><div class="frlist">${asks}</div>` : ""}
+     <h3>Your friends</h3>
+     ${nothing}
+     <div class="frlist">${list}${sent}</div>
      <div class="crewrow">
        <input id="friendInput" maxlength="14" placeholder="Their name" autocomplete="off" spellcheck="false" aria-label="Friend's name">
        <button type="button" id="friendAdd">Add</button>
@@ -1629,12 +1669,22 @@ $("styleSeg").onclick = e=>{
 };
 $("zoomRng").oninput = e=>{ settings.zoomSens=+e.target.value; store.set("zoomSens",settings.zoomSens); paintSettings(); };
 $("assistSw").onclick = ()=>{ settings.assist=!settings.assist; store.set("assist",settings.assist); paintSettings(); if(state.phase==="answering") renderAct(); };
-for(const b of document.querySelectorAll(".mode")) b.onclick = ()=>startRound(b.dataset.mode);
-function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); paintPlayer(); paintChallenges(); refreshSocial(); }
+for(const b of document.querySelectorAll(".mode")) b.onclick = ()=>{ lastChallenge=null; startRound(b.dataset.mode); };
+function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; lastChallenge=null; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); paintPlayer(); paintChallenges(); refreshSocial(); }
 $("quitBtn").onclick = goHome;
 $("resumeBtn").onclick = resumeRound;
 $("resumeDrop").onclick = dropRound;
-$("againBtn").onclick = ()=>startRound(state.mode);   // always an ordinary round, never a re-send
+/* Play again, or rematch. A rematch is a fresh set of questions against the same person on the
+   same setup: replaying the identical questions would only be a memory test. */
+let lastChallenge = null;
+$("againBtn").onclick = ()=>{
+  if(lastChallenge){
+    startRound(lastChallenge.mode, { answering:false, toName:lastChallenge.opponent,
+                                     len:lastChallenge.len, reg:lastChallenge.reg });
+  }else{
+    startRound(state.mode);
+  }
+};
 $("homeBtn").onclick = goHome;
 $("boardBtn").onclick = ()=>showBoard(state.mode);
 $("rBoardBtn").onclick = ()=>showBoard(state.mode);
@@ -1653,17 +1703,36 @@ $("friendsBox").onclick = async e => {
     return;
   }
 
+  if(b.dataset.accept || b.dataset.decline){
+    const accepting = !!b.dataset.accept;
+    b.disabled = true;
+    try{
+      const r = await apiPost("/v1/friends/" + (accepting ? "accept" : "decline"),
+        { playerId:pid, fromId: b.dataset.accept || b.dataset.decline });
+      takeFriends(r);
+      paintBoard();
+      friendNote(accepting ? "You are friends now." : "Request declined.", accepting);
+    }catch(err){
+      b.disabled = false;
+      friendNote("Could not reach the server.");
+    }
+    return;
+  }
+
   if(b.id === "friendAdd"){
     const input = $("friendInput");
     const name = cleanName(input ? input.value : "");
     if(!name){ friendNote("Type your friend's name."); return; }
     if(same(name, player)){ friendNote("That is you."); return; }
-    b.disabled = true; friendNote("Adding…");
+    b.disabled = true; friendNote("Asking…");
     try{
       const r = await apiPost("/v1/friends", { playerId:pid, name:player, friend:name });
-      friends = Array.isArray(r.friends) ? r.friends : friends;
+      takeFriends(r);
       paintBoard();
-      friendNote(`${r.friend.name} added.`, true);
+      // Asking someone who had already asked you needs no second step.
+      friendNote(r.state === "friends"
+        ? `You and ${r.friend.name} are friends now.`
+        : `Asked ${r.friend.name}. They appear once they accept.`, true);
     }catch(err){
       b.disabled = false;
       friendNote(err && err.message === "no such player"
@@ -1710,7 +1779,7 @@ function refreshSocial(){
   if(!player) return;
   loadChallenges().then(paintChallenges).catch(()=>{});
   loadFriends().then(()=>{ if($("board").classList.contains("on")) paintBoard(); }).catch(()=>{});
-}$("boardPlay").onclick = ()=>startRound(boardMode);
+}$("boardPlay").onclick = ()=>{ lastChallenge=null; startRound(boardMode); };
 
 /* ===== Name gate =====
    Two ways in: the first visit, where there is no way past it, and the Switch button, where the

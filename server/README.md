@@ -15,15 +15,18 @@ from finished rounds submitted by players.
 | `POST` | `/v1/name` | Claim a name; 409 if someone else holds it |
 | `POST` | `/v1/score` | Submit a finished round |
 | `GET`  | `/v1/board` | Read a board: `scope=world\|friends`, `mode`, `len`, `reg`, `playerId` |
-| `GET`  | `/v1/friends` | List the friends you have added |
-| `POST` | `/v1/friends` | Add a friend by name |
+| `GET`  | `/v1/friends` | Your friends, requests waiting on you, and requests you sent |
+| `POST` | `/v1/friends` | Ask someone to be friends, by name |
+| `POST` | `/v1/friends/accept` | Accept a request, which makes it mutual |
+| `POST` | `/v1/friends/decline` | Decline a request |
 | `POST` | `/v1/challenge` | Send a challenge: the round you played, and the questions in it |
 | `GET`  | `/v1/challenges` | Challenges waiting for you, sent by you, and settled |
 | `POST` | `/v1/challenge/result` | Answer a challenge you were sent |
 
 A player is identified by a random id the browser generates and keeps, not by their name, so
 renaming yourself keeps your scores and your challenges. Names are unique because a friend finds
-you by typing one; adding is one-directional and needs no permission.
+you by typing one. Friendship is mutual: asking creates a request, and accepting writes both
+directions at once. Two people asking each other resolves immediately rather than crossing.
 
 A challenge carries its question set as `{iso, clue}` per question. The clue index is what makes a
 fact round reproducible: without it the opponent would meet the same countries but different
