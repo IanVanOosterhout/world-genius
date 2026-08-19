@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
-Reproject NASA Blue Marble (equirectangular, public domain) onto the exact Equal Earth frame
-used by the vector map, and write it out as a tiled pyramid for embedding.
+Cut NASA Blue Marble (equirectangular, public domain) to the exact frame used by the vector map
+and write it out as a tiled pyramid for embedding.
+
+The map frame is equirectangular too, which is the projection the source is already in, so this
+is a crop to the clipped latitude range and a resample in scale only. It used to be a full
+reprojection onto an Equal Earth frame, which bowed the imagery into a rounded shell along with
+everything else; the flat frame leaves the imagery looking the way the source does.
 
 The app is fully offline, so a tiled satellite basemap fetched from a server is not an option.
 Instead the whole world is baked once, ahead of time, into images that line up pixel-for-pixel
@@ -33,7 +38,7 @@ OUT  = os.path.join(HERE, 'sat')
 
 BASE_W = 4000
 LEVELS = [
-    # width, cols, rows  -> every tile is 1000x890 px before bleed
+    # width, cols, rows  -> every tile is 1000 px wide before bleed
     (8000,   8, 4),
     (16000, 16, 8),
 ]
@@ -47,9 +52,6 @@ SS    = 2          # supersampling factor per axis (2 -> 4 samples per output pi
 # they hold. The test keys off Blue Marble's palette, where sea is blue-dominant and dark.
 LAND_SHARE = 0.25
 
-A1, A2, A3, A4 = 1.340264, -0.081106, 0.000893, 0.003796
-M = math.sqrt(3) / 2
-
 with open(os.path.join(HERE, 'map_data.json')) as f:
     md = json.load(f)
 ext, W, H = md['ext'], md['W'], md['H']
@@ -62,23 +64,12 @@ del src
 print(f'  source {SW}x{SH}  ({SA.nbytes/2**30:.2f} GiB in memory)')
 
 
-def solve_t(y_ee):
-    """Invert y_ee = A1*t + A2*t^3 + A3*t^7 + A4*t^9 for t (Newton). y_ee is one value per row."""
-    t = y_ee.copy()
-    for _ in range(24):
-        t2 = t * t
-        t6 = t2 * t2 * t2
-        f  = t * (A1 + A2 * t2 + t6 * (A3 + A4 * t2)) - y_ee
-        fp = A1 + 3 * A2 * t2 + t6 * (7 * A3 + 9 * A4 * t2)
-        t -= f / fp
-    return t
-
-
 def render(out_w, out_h, band=96):
-    """Reproject the source into an out_w x out_h RGBA array of the Equal Earth map frame.
+    """Resample the source into an out_w x out_h RGBA array of the map frame.
 
-    The Equal Earth inverse depends only on the row, so the Newton solve runs once per row
-    rather than once per pixel, and the source row lookup is shared across the whole row.
+    The frame is equirectangular, so the inverse is linear on both axes: a row is one latitude
+    and a column is one longitude, independent of each other. Supersampling and the bilinear
+    fetch are kept because the scale change still resamples every pixel.
     """
     out = np.empty((out_h, out_w, 4), np.uint8)
     px_scale = out_w / W                      # output px per map unit
@@ -94,16 +85,8 @@ def render(out_w, out_h, band=96):
         for sy in range(SS):
             yy    = (np.arange(y0, y1) + (sy + 0.5) / SS) / px_scale        # map units
             Ymap  = ext['minY'] + yy / ext['scale']                          # projected, y-down
-            t     = solve_t(-Ymap)                                           # undo the y flip
-            t2    = t * t
-            t6    = t2 * t2 * t2
-            denom = A1 + 3 * A2 * t2 + t6 * (7 * A3 + 9 * A4 * t2)
-
-            with np.errstate(invalid='ignore', divide='ignore'):
-                sin_phi = np.sin(t) / M
-                row_ok  = np.abs(sin_phi) <= 1.0
-                lat     = np.degrees(np.arcsin(np.clip(sin_phi, -1, 1)))
-                kx      = M * denom / np.cos(t)                              # lon(rad) per proj x
+            lat    = np.degrees(-Ymap)                                       # undo the y flip
+            row_ok = np.abs(lat) <= 90.0
 
             v  = (90.0 - lat) / 180.0 * (SH - 1)
             v  = np.clip(np.nan_to_num(v), 0, SH - 1)
@@ -114,10 +97,9 @@ def render(out_w, out_h, band=96):
             for sx in range(SS):
                 xs   = (xs_base + (sx + 0.5) / SS) / px_scale                # map units
                 Xmap = ext['minX'] + xs / ext['scale']                       # projected x
-                with np.errstate(invalid='ignore', divide='ignore'):
-                    lon = np.degrees(Xmap[None, :] * kx[:, None])
+                lon  = np.degrees(Xmap)[None, :]                             # one per column
 
-                inside = row_ok[:, None] & (np.abs(lon) <= 180.0) & np.isfinite(lon)
+                inside = row_ok[:, None] & (np.abs(lon) <= 180.0)
 
                 u  = (np.nan_to_num(lon) + 180.0) / 360.0 * (SW - 1)
                 u  = np.clip(u, 0, SW - 1)

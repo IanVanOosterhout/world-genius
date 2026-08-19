@@ -7,14 +7,15 @@
 const fs = require('fs');
 const SRC = __dirname + '/world50.geojson';
 
-// ---- Equal Earth projection (Savric, Patterson & Jenny 2018) ----
-const A1=1.340264, A2=-0.081106, A3=0.000893, A4=0.003796, M=Math.sqrt(3)/2;
+/* ---- Equirectangular (plate carree) ----
+
+   Longitude straight across, latitude straight down, nothing else. This replaced Equal Earth,
+   whose converging meridians bowed the whole map into a rounded shell: an honest projection for
+   comparing areas, but the game is about finding a country, not measuring one, and a curved
+   frame makes a map harder to read. It is also the projection Blue Marble is already in, so the
+   satellite imagery is a crop and a resize rather than a resampling of every pixel. */
 function project(lon, lat){
-  const l = lon*Math.PI/180, p = lat*Math.PI/180;
-  const t = Math.asin(M*Math.sin(p)), t2=t*t, t6=t2*t2*t2;
-  const x = l*Math.cos(t)/(M*(A1+3*A2*t2+t6*(7*A3+9*A4*t2)));
-  const y = t*(A1+A2*t2+t6*(A3+A4*t2));
-  return [x, -y];
+  return [lon*Math.PI/180, -lat*Math.PI/180];
 }
 
 // ---- Douglas-Peucker (iterative, so long coastlines cannot blow the stack) ----
@@ -256,8 +257,8 @@ console.log('MISSING:', missing.join(',') || '(none)');
 console.log('pins needed (area<16):', playable.filter(e=>e.area<16).length);
 console.log('sub-unit (marker polygon):', tiny.join(' ') || '(none)');
 
-// The exact projection extent, so the satellite raster can be reprojected onto the identical
-// Equal Earth frame as the vector borders.
+// The exact projection extent, so the satellite raster can be cut to the identical frame as the
+// vector borders.
 const ext = { minX, maxX, minY, maxY, scale, latClip: LAT_CLIP };
 fs.writeFileSync(__dirname+'/map_data.json', JSON.stringify({W,H,ext,
   playable:playable.map(e=>({iso:e.iso,admin:e.admin,name:e.name,d:e.d,cx:e.cx,cy:e.cy,area:e.area})),

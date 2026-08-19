@@ -191,8 +191,8 @@ svg#map{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 svg#map.grabbing{cursor:grabbing}
 #map .c{fill:var(--land);fill-rule:evenodd;stroke:var(--border);stroke-width:.6;vector-effect:non-scaling-stroke;stroke-linejoin:round;pointer-events:all}
 #map .t{fill:var(--terr);fill-rule:evenodd;stroke:var(--border);stroke-width:.6;vector-effect:non-scaling-stroke;pointer-events:none}
-/* Satellite view: NASA Blue Marble reprojected onto the same Equal Earth frame, so the country
-   outlines sit exactly on the imagery. Fills go transparent and borders lighten to stay legible. */
+/* Satellite view: NASA Blue Marble cut to the same flat frame, so the country outlines sit
+   exactly on the imagery. Fills go transparent and borders lighten to stay legible. */
 #satLayer{display:none}
 #map.sat #satLayer{display:block}
 /* Detail tiles fade in over the coarser imagery already on screen, so sharpening up after a
@@ -383,6 +383,8 @@ svg#map.grabbing{cursor:grabbing}
         <button class="lead" id="boardBtn">Leaderboard</button>
       </div>
 
+      <div class="crewbox" id="friendsBox" hidden></div>
+
       <div class="challenges" id="chalCard" hidden></div>
 
       <div class="resume" id="resumeCard" hidden>
@@ -468,10 +470,11 @@ svg#map.grabbing{cursor:grabbing}
         </div>
         <div class="row">
           <div class="lbl">
-            <b>Name assist</b>
-            <small>Show the country&rsquo;s name before you confirm. Off is the real challenge.</small>
+            <b>Practice Mode</b>
+            <small>Show the country&rsquo;s name before you confirm. Practice rounds are not scored:
+              they go on no leaderboard and set no personal best.</small>
           </div>
-          <button class="sw" id="assistSw" role="switch" aria-checked="false" aria-label="Name assist"></button>
+          <button class="sw" id="practiceSw" role="switch" aria-checked="false" aria-label="Practice Mode"></button>
         </div>
       </div>
 
@@ -551,7 +554,6 @@ svg#map.grabbing{cursor:grabbing}
         <button role="radio" data-bmode="capital">Capital</button>
       </div>
       <p class="board-sub" id="boardSub"></p>
-      <div class="crewbox" id="friendsBox" hidden></div>
       <div class="lb" id="lbList"></div>
       <button class="btn ghost" id="boardPlay" style="flex:none">Play this mode</button>
     </div>
@@ -602,13 +604,20 @@ const store = {
   set(k, v){ try{ localStorage.setItem("wg_"+k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem("wg_"+k); }catch(e){} }
 };
-let settings = { len: store.get("len",10), reg: store.get("reg","all"), assist: store.get("assist",false), sat: store.get("sat",false),
-                 zoomSens: store.get("zoomSens",1) };
+let settings = { len: store.get("len",10), reg: store.get("reg","all"), sat: store.get("sat",false),
+                 // Name assist became Practice Mode. A device that stored the old key keeps its choice.
+                 practice: store.get("practice", store.get("assist", false)),
+                 custom: store.get("custom",null), zoomSens: store.get("zoomSens",1) };
 // A bad or out-of-range stored value would make the map unzoomable, so pin it to the slider's range.
 settings.zoomSens = Math.min(2.5, Math.max(0.3, +settings.zoomSens || 1));
 // Length is a free number now, so a stored one has to be an integer before it is trusted. The
 // region cap is applied later, once the country list exists.
 settings.len = Math.max(1, Math.round(+settings.len) || 10);
+/* Whether the custom box is open is its own setting, not something read back off the number.
+   Deriving it meant clicking Custom on a length that happened to be 5, 10 or 20 changed nothing,
+   so the box never opened and Custom could not be chosen at all. A player who has never touched
+   it starts wherever their stored length puts them. */
+settings.custom = settings.custom === null ? ![5,10,20].includes(settings.len) : !!settings.custom;
 
 /* ===== Players and the leaderboard =====
    Names live in this browser only, so the board ranks whoever has played on this device: a
@@ -1235,6 +1244,13 @@ const pool = () => regionPool(settings.reg);
 const maxLen = reg => regionPool(reg).length;
 function clampLen(){
   settings.len = Math.min(Math.max(1, settings.len), maxLen(settings.reg));
+  /* Narrowing the region can pull a preset down to a number no preset carries: 20 questions
+     becomes 14 in Oceania. The custom box is the only place a length like that can be read, so
+     it opens itself rather than leaving the number showing nowhere. */
+  if(![5,10,20].includes(settings.len)){
+    settings.custom = true;
+    store.set("custom", true);
+  }
 }
 
 /* A country is asked at most once per round. Nothing needs to handle a round longer than the
@@ -1283,12 +1299,12 @@ function cleanSeen(x){
    Written on every tap and every answer so a reload, a crash or a closed tab can pick the
    round back up. Only whole rounds count towards a personal best, so this is the one thing
    that would otherwise be lost. Bumped if the shape below ever changes. */
-const ROUND_V = 3;
+const ROUND_V = 4;
 function saveRound(){
   if(state.phase==="idle") return;
   store.set("round", { v:ROUND_V, player:player, mode:state.mode, reg:state.reg, queue:state.queue, i:state.i,
     score:state.score, streak:state.streak, bestStreak:state.bestStreak, sel:state.sel,
-    log:state.log, phase:state.phase, clue:state.clue, seen:seen });
+    log:state.log, phase:state.phase, clue:state.clue, seen:seen, practice:!!state.practice });
 }
 function dropRound(){ store.del("round"); paintResume(); }
 
@@ -1316,6 +1332,11 @@ function loadRound(){
 function startRound(mode, challenge){
   state.mode=mode; state.reg=settings.reg; state.i=0; state.score=0; state.streak=0; state.bestStreak=0;
   state.log=[]; state.clues=[]; state.challenge=challenge||null;
+  /* Read once, here, rather than at the end: flicking the switch off on the last question would
+     otherwise turn a round played with the answers showing into a leaderboard score. */
+  state.practice = !!settings.practice;
+  lastMode = mode;
+  store.set("lastMode", mode);
   if(challenge && challenge.answering){
     // The set is already decided: same countries, same order, same clues.
     state.reg = challenge.reg;
@@ -1353,6 +1374,7 @@ function resumeRound(){
   state.mode=r.mode; state.reg=typeof r.reg==="string"?r.reg:"all";
   state.queue=r.queue; state.i=r.i; state.score=r.score;
   state.streak=r.streak; state.bestStreak=r.bestStreak; state.log=r.log; state.clue=r.clue|0;
+  state.practice=!!r.practice;
   for(const k in seen) delete seen[k];
   Object.assign(seen, cleanSeen(r.seen));
   show("game");
@@ -1434,7 +1456,7 @@ function renderAct(){
   if(state.phase==="answering"){
     if(!state.sel){
       el.innerHTML = `<span class="tip">Tap a country on the map to make your guess</span>`;
-    }else if(settings.assist){
+    }else if(settings.practice){
       el.innerHTML =
         `<span class="pick"><span class="dot"></span><span style="min-width:0"><b>${C[state.sel].n}</b><small>Tap another country to change</small></span></span>
          <button class="btn" id="confirmBtn" style="flex:0 0 auto">Confirm</button>`;
@@ -1514,8 +1536,10 @@ function ord(n){ const t=["th","st","nd","rd"], v=n%100; return n+(t[(v-20)%10]|
 function finish(){
   const n=state.queue.length, s=state.score;
   const prev = bestScore(state.mode,n,state.reg)||0;
-  recordRound();
-  submitRound();
+  if(!state.practice){
+    recordRound();
+    submitRound();
+  }
   if(state.challenge) submitChallenge();
   state.phase="idle";
   dropRound();
@@ -1542,6 +1566,12 @@ function finish(){
       : `A draw with ${ch.opponent}, ${s} each.`;
   }else if(ch){
     $("rSub").textContent = `Challenge sent to ${ch.toName}. They answer the same ${n} questions.`;
+  }else if(state.practice){
+    // No personal best and no board position, because neither was written. Saying so is the
+    // point: a screen that quietly showed the old ranking would read as though this round counted.
+    $("rSub").textContent =
+      `Practice round · ${MODE_SHORT[state.mode]} Mode · ${state.reg==="all"?"World":state.reg}` +
+      ` · not scored. Turn Practice Mode off to play for the board.`;
   }else{
     // Where the round leaves them on the board for the setup they just played.
     const rows = boardRows(state.mode,n,state.reg);
@@ -1586,6 +1616,7 @@ function paintBest(){
 function paintPlayer(){
   $("playerBar").hidden = !player;
   $("playerName").textContent = player;
+  paintFriends();
 }
 
 /* The board shows one setup at a time, the one selected on the home screen, because a score is
@@ -1593,6 +1624,10 @@ function paintPlayer(){
    Its own tabs pick the mode, since that is the one people flip between, and its scope picks how
    far the comparison reaches: this device, your friends, or everyone. */
 let boardMode = "fact";
+/* The mode a challenge sent from the home screen is played in. There is no mode tab there, so it
+   follows the last round played on this device and is named on the button, which keeps the choice
+   visible instead of surprising. */
+let lastMode = MODE_LABEL[store.get("lastMode","fact")] ? store.get("lastMode","fact") : "fact";
 let boardScope = "local";
 // A slow answer for a board nobody is looking at any more must not paint over a newer one.
 let boardReq = 0;
@@ -1616,7 +1651,6 @@ function paintBoard(){
   const len = settings.len, reg = settings.reg, regName = reg==="all" ? "World" : reg;
   $("boardSub").textContent =
     `${len} questions · ${regName}. Change the round length or region on the home screen for the other boards.`;
-  paintFriends();
 
   if(boardScope === "local"){
     const rows = boardRows(boardMode, len, reg).map(e => ({
@@ -1644,10 +1678,14 @@ function paintBoard(){
 
 /* The friends panel: who is on your board, and the box that puts someone there. A friend is
    added by typing their name, which is why names are unique on the server. Each one carries the
-   button that starts a challenge against them. */
+   button that starts a challenge against them.
+
+   It sits on the home screen directly under the name, not inside the leaderboard: friends are
+   people you play with, not a way of filtering a table, and burying them behind a board scope
+   meant nobody found them. It needs a name to hang off, so it stays hidden until there is one. */
 function paintFriends(){
   const box = $("friendsBox");
-  if(boardScope !== "friends"){ box.hidden = true; return; }
+  if(!player){ box.hidden = true; return; }
   box.hidden = false;
 
   const asks = incoming.map(f => `<div class="fr ask">
@@ -1657,7 +1695,7 @@ function paintFriends(){
     </div>`).join("");
   const list = friends.map(f => `<div class="fr">
       <b>${esc(f.name)}</b>
-      <button type="button" class="chal" data-challenge="${esc(f.name)}">Challenge</button>
+      <button type="button" class="chal" data-challenge="${esc(f.name)}">Challenge · ${MODE_SHORT[lastMode]}</button>
     </div>`).join("");
   // Someone you have asked is neither a friend nor an action: shown so you know it was sent.
   const sent = outgoing.map(f => `<div class="fr pend">
@@ -1690,7 +1728,7 @@ function showBoard(mode){
 }
 function paintSettings(){
   const cap = maxLen(settings.reg);
-  const custom = ![5,10,20].includes(settings.len);
+  const custom = settings.custom;
   for(const b of $("lenSeg").children){
     if(b.dataset.len === "custom"){
       b.setAttribute("aria-checked", String(custom));
@@ -1706,9 +1744,13 @@ function paintSettings(){
   $("lenMax").textContent = cap;
   const num = $("lenNum");
   num.max = cap;
-  if(document.activeElement !== num) num.value = settings.len;
+  /* Always, rather than only when the box is unfocused. Nothing repaints the settings while
+     someone is typing (oninput deliberately does not), so the guard defended against a case that
+     cannot arise, and it let the box keep showing a number the round no longer had: switch to
+     Europe with 137 in the box and it still read 137 after being clamped to 45. */
+  num.value = settings.len;
   for(const b of $("regSeg").children) b.setAttribute("aria-checked", String(b.dataset.reg===settings.reg));
-  $("assistSw").setAttribute("aria-checked", String(settings.assist));
+  $("practiceSw").setAttribute("aria-checked", String(settings.practice));
   for(const b of $("styleSeg").children) b.setAttribute("aria-checked", String((b.dataset.sat==="1")===!!settings.sat));
   const zr=$("zoomRng");
   zr.value = settings.zoomSens;
@@ -1720,10 +1762,11 @@ $("lenSeg").onclick = e=>{
   const b=e.target.closest("button");
   if(!b || b.disabled) return;
   // Custom opens the box on whatever is currently set rather than resetting it.
-  if(b.dataset.len !== "custom") settings.len = +b.dataset.len;
-  else if([5,10,20].includes(settings.len)) settings.len = Math.min(settings.len, maxLen(settings.reg));
+  settings.custom = b.dataset.len === "custom";
+  if(!settings.custom) settings.len = +b.dataset.len;
   clampLen();
   store.set("len",settings.len);
+  store.set("custom",settings.custom);
   paintSettings();
   if(b.dataset.len === "custom") $("lenNum").focus();
 };
@@ -1751,7 +1794,7 @@ $("styleSeg").onclick = e=>{
   applySat(); paintSettings();
 };
 $("zoomRng").oninput = e=>{ settings.zoomSens=+e.target.value; store.set("zoomSens",settings.zoomSens); paintSettings(); };
-$("assistSw").onclick = ()=>{ settings.assist=!settings.assist; store.set("assist",settings.assist); paintSettings(); if(state.phase==="answering") renderAct(); };
+$("practiceSw").onclick = ()=>{ settings.practice=!settings.practice; store.set("practice",settings.practice); paintSettings(); if(state.phase==="answering") renderAct(); };
 for(const b of document.querySelectorAll(".mode")) b.onclick = ()=>{ lastChallenge=null; startRound(b.dataset.mode); };
 function goHome(){ cancelAnimationFrame(flyRAF); state.phase="idle"; lastChallenge=null; clearPtrs(); closeFlagZoom(); show("home"); paintSettings(); paintResume(); paintPlayer(); paintChallenges(); refreshSocial(); }
 $("quitBtn").onclick = goHome;
@@ -1782,7 +1825,7 @@ $("friendsBox").onclick = async e => {
 
   if(b.dataset.challenge){
     // A challenge is an ordinary round that happens to be recorded and sent when it ends.
-    startRound(boardMode, { answering:false, toName:b.dataset.challenge });
+    startRound(lastMode, { answering:false, toName:b.dataset.challenge });
     return;
   }
 
@@ -1793,7 +1836,7 @@ $("friendsBox").onclick = async e => {
       const r = await apiPost("/v1/friends/" + (accepting ? "accept" : "decline"),
         { playerId:pid, fromId: b.dataset.accept || b.dataset.decline });
       takeFriends(r);
-      paintBoard();
+      paintFriends();
       friendNote(accepting ? "You are friends now." : "Request declined.", accepting);
     }catch(err){
       b.disabled = false;
@@ -1811,7 +1854,7 @@ $("friendsBox").onclick = async e => {
     try{
       const r = await apiPost("/v1/friends", { playerId:pid, name:player, friend:name });
       takeFriends(r);
-      paintBoard();
+      paintFriends();
       // Asking someone who had already asked you needs no second step.
       friendNote(r.state === "friends"
         ? `You and ${r.friend.name} are friends now.`
@@ -1861,7 +1904,10 @@ $("chalCard").onclick = e => {
 function refreshSocial(){
   if(!player) return;
   loadChallenges().then(paintChallenges).catch(()=>{});
-  loadFriends().then(()=>{ if($("board").classList.contains("on")) paintBoard(); }).catch(()=>{});
+  loadFriends().then(()=>{
+    paintFriends();
+    if($("board").classList.contains("on")) paintBoard();
+  }).catch(()=>{});
 }$("boardPlay").onclick = ()=>{ lastChallenge=null; startRound(boardMode); };
 
 /* ===== Name gate =====

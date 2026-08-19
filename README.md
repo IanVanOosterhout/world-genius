@@ -23,8 +23,7 @@ an answer is revealed, tap the flag beside the country's name to see it full scr
 ## Map styles
 
 - **Vector** (default), flat country fills with clear borders
-- **Satellite**, NASA Blue Marble imagery reprojected onto the same Equal Earth frame, with country
-  outlines drawn over it
+- **Satellite**, NASA Blue Marble imagery cut to the same frame, with country outlines drawn over it
 
 Switch with the globe button on the map, or from the home screen. The imagery is baked into the
 file like everything else, so satellite view works with no network connection.
@@ -39,8 +38,11 @@ between them, and fade in over the coarser imagery already on screen.
 ## The map
 
 Every country is drawn with real borders from [Natural Earth](https://www.naturalearthdata.com/)
-(public domain) 1:50m data, on an Equal Earth projection so country sizes are not distorted the
-way Mercator distorts them.
+(public domain) 1:50m data, on a flat equirectangular projection: longitude straight across,
+latitude straight down. It was Equal Earth first, which keeps country sizes honest, but the
+converging meridians bowed the whole map into a rounded shell and a curved frame is harder to
+read when the task is finding a country rather than measuring one. It is also the projection
+Blue Marble already ships in, so the satellite imagery needs no resampling beyond a resize.
 
 - **Pan**, drag, or swipe on touch
 - **Zoom**, scroll, pinch, double-click, or the +/− buttons
