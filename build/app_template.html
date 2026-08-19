@@ -727,15 +727,23 @@ const bestScore = (mode,len,reg,name) => {
   return e ? e.score : undefined;
 };
 
-/* Ranked by score, then by the longest streak that made it, then by who got there first, so a
-   tie is never broken by a reload or by the order names happen to sit in the store. */
-function boardRows(mode,len,reg){
-  const rows = [];
+/* Ranked by how many were right, then by the longest streak that made it, then by who got there
+   first, so a tie is never broken by a reload or by the order names happen to sit in the store.
+
+   Round length is not part of the ranking. A board holds every player's best round of this mode
+   and region whatever length they chose, so 19 out of 20 stands above 18 out of 100 and 20 out
+   of 100 stands above both. Records are still kept per length, so one player can own several:
+   only their best one goes on the board, since a board ranks people, not rounds. */
+const byScore = (a,b) => b.score - a.score || b.streak - a.streak || a.at - b.at || a.name.localeCompare(b.name);
+function boardRows(mode,reg){
+  const best = {};
   for(const k in scores){
     const e = scores[k];
-    if(e.mode === mode && e.len === len && e.reg === reg) rows.push(e);
+    if(e.mode !== mode || e.reg !== reg) continue;
+    const who = e.name.toLowerCase();
+    if(!best[who] || byScore(e, best[who]) < 0) best[who] = e;
   }
-  return rows.sort((a,b) => b.score - a.score || b.streak - a.streak || a.at - b.at || a.name.localeCompare(b.name));
+  return Object.values(best).sort(byScore);
 }
 
 function recordRound(){
@@ -1660,8 +1668,8 @@ function finish(){
       `Practice round · ${MODE_SHORT[state.mode]} Mode · ${state.reg==="all"?"World":state.reg}` +
       ` · not scored. Turn Practice Mode off to play for the board.`;
   }else{
-    // Where the round leaves them on the board for the setup they just played.
-    const rows = boardRows(state.mode,n,state.reg);
+    // Where the round leaves them on the board for the mode and region they just played.
+    const rows = boardRows(state.mode,state.reg);
     const pos = rows.findIndex(e=>same(e.name,player));
     $("rSub").textContent =
       (s>prev && s>0 ? "New personal best! " : "") +
@@ -1706,10 +1714,11 @@ function paintPlayer(){
   paintFriends();
 }
 
-/* The board shows one setup at a time, the one selected on the home screen, because a score is
-   only worth comparing against the same mode, the same number of questions and the same region.
-   Its own tabs pick the mode, since that is the one people flip between, and its scope picks how
-   far the comparison reaches: this device, your friends, or everyone. */
+/* The board shows one mode and one region at a time, ranked by how many questions were answered
+   right. The number asked is not part of it: a round of 100 is a harder way to reach 18 than a
+   round of 20 is to reach 19, and the board says who got the most right, not who was most
+   efficient. Its own tabs pick the mode, since that is the one people flip between, and its
+   scope picks how far the comparison reaches: this device, your friends, or everyone. */
 let boardMode = "fact";
 /* The mode a challenge sent from the home screen is played in. There is no mode tab there, so it
    follows the last round played on this device and is named on the button, which keeps the choice
@@ -1719,23 +1728,25 @@ let boardScope = "local";
 // A slow answer for a board nobody is looking at any more must not paint over a newer one.
 let boardReq = 0;
 
-function boardRow(e, i, len){
+/* Each row carries the length of the round behind it, since the board no longer has one of its
+   own: the score is what ranks, and the length is what makes it mean something. */
+function boardRow(e, i){
   const rank = e.rank || i + 1;
   return `<div class="r${rank<=3?" p"+rank:""}${e.you?" me":""}">
     <span class="rk">${rank}</span>
     <span class="nm"><b>${esc(e.name)}${e.you?'<span class="you">you</span>':""}</b><small>${e.rounds} round${e.rounds===1?"":"s"} · best streak ${e.streak}</small></span>
-    <span class="sc"><b>${e.score}/${len}</b><small>${Math.round(e.score/len*100)}%</small></span>
+    <span class="sc"><b>${e.score}/${e.len}</b><small>${Math.round(e.score/e.len*100)}%</small></span>
   </div>`;
 }
-function boardEmpty(len, regName){
+function boardEmpty(regName){
   const where = boardScope === "local" ? "on this device" : boardScope === "friends" ? "among your friends" : "anywhere";
-  return `<div class="lb-empty">Nobody ${where} has finished a ${MODE_SHORT[boardMode].toLowerCase()} round of ${len} questions${settings.reg==="all"?"":" in "+regName} yet.<br>Play one to open the board.</div>`;
+  return `<div class="lb-empty">Nobody ${where} has finished a ${MODE_SHORT[boardMode].toLowerCase()} round${settings.reg==="all"?"":" in "+regName} yet.<br>Play one to open the board.</div>`;
 }
 
 function paintBoard(){
   for(const b of $("boardSeg").children) b.setAttribute("aria-checked", String(b.dataset.bmode===boardMode));
   for(const b of $("scopeSeg").children) b.setAttribute("aria-checked", String(b.dataset.scope===boardScope));
-  const len = settings.len, reg = settings.reg, regName = reg==="all" ? "World" : reg;
+  const reg = settings.reg, regName = reg==="all" ? "World" : reg;
 
   /* The challenge log is a record of head to heads, not a ranking of one setup, so the mode tabs
      and the play button have nothing to say about it and step aside. */
@@ -1745,23 +1756,24 @@ function paintBoard(){
   if(isChal){ paintChalBoard(); return; }
 
   $("boardSub").textContent =
-    `${len} questions · ${regName}. Change the round length or region on the home screen for the other boards.`;
+    `${regName} · every round length together, ranked by how many were right.`
+    + ` Change the region on the home screen for the other boards.`;
 
   if(boardScope === "local"){
-    const rows = boardRows(boardMode, len, reg).map(e => ({
-      name:e.name, score:e.score, streak:e.streak, rounds:e.rounds, you:same(e.name, player) }));
+    const rows = boardRows(boardMode, reg).map(e => ({
+      name:e.name, score:e.score, len:e.len, streak:e.streak, rounds:e.rounds, you:same(e.name, player) }));
     $("lbList").hidden = false;
-    $("lbList").innerHTML = rows.length ? rows.map((e,i)=>boardRow(e,i,len)).join("") : boardEmpty(len, regName);
+    $("lbList").innerHTML = rows.length ? rows.map(boardRow).join("") : boardEmpty(regName);
     return;
   }
   const my = ++boardReq;
   $("lbList").hidden = false;
   $("lbList").innerHTML = `<div class="lb-status">Loading the board…</div>`;
-  const q = new URLSearchParams({ scope: boardScope, mode:boardMode, len:String(len), reg, playerId:pid });
+  const q = new URLSearchParams({ scope: boardScope, mode:boardMode, reg, playerId:pid });
   api("/v1/board?" + q.toString()).then(res => {
     if(my !== boardReq) return;
     const rows = Array.isArray(res.rows) ? res.rows : [];
-    $("lbList").innerHTML = rows.length ? rows.map((e,i)=>boardRow(e,i,len)).join("") : boardEmpty(len, regName);
+    $("lbList").innerHTML = rows.length ? rows.map(boardRow).join("") : boardEmpty(regName);
   }).catch(() => {
     if(my !== boardReq) return;
     // Nothing has been lost when this fails: the round is already scored and stored here, and
@@ -2060,18 +2072,24 @@ $("chalCard").onclick = e => {
   startRound(c.mode, { id:c.id, questions:c.questions, reg:c.reg, len:c.len, opponent:c.opponent });
 };
 
-/* ===== Challenge setup =====
-   The rules are chosen once, by whoever starts it, and then belong to the round rather than to
-   either player's home screen: changing the length afterwards cannot move the goalposts on a
-   challenge already out there. Everything opens on the home screen's current settings, because
+/* ===== Round setup =====
+   The same three choices for both things it starts. A challenge's rules are chosen once, by
+   whoever starts it, and then belong to the round rather than to either player's home screen:
+   changing the length afterwards cannot move the goalposts on a challenge already out there.
+
+   `cs.to` empty means a round for yourself, which is what the leaderboard's Play button opens:
+   the board no longer separates the round lengths, so it cannot know which one was meant and
+   asks instead of picking one. Everything opens on the home screen's current settings, because
    that is what the player was already looking at. */
 const cs = { to:"", mode:"fact", reg:"all", len:10, custom:false, busy:false };
+const csSolo = () => !cs.to;
 
 function csMax(){ return maxLen(cs.reg); }
 function paintChalSetup(){
-  $("csTitle").textContent = `Challenge ${cs.to}`;
-  $("csMsg").textContent =
-    "Both of you play the same questions, in the same order. Neither waits for the other: "
+  $("csTitle").textContent = csSolo() ? "New round" : `Challenge ${cs.to}`;
+  $("csMsg").textContent = csSolo()
+    ? "The same choices as the home screen. Starting here changes them there too."
+    : "Both of you play the same questions, in the same order. Neither waits for the other: "
     + "whoever finishes second sees the result.";
   for(const b of $("csMode").children) b.setAttribute("aria-checked", String(b.dataset.mode===cs.mode));
   for(const b of $("csReg").children)  b.setAttribute("aria-checked", String(b.dataset.reg===cs.reg));
@@ -2090,17 +2108,27 @@ function paintChalSetup(){
   const num = $("csNum");
   num.max = cap;
   num.value = cs.len;
-  $("csNote").textContent =
-    `${MODE_SHORT[cs.mode]} Mode · ${cs.len} question${cs.len===1?"":"s"} · `
-    + `${cs.reg==="all"?"the whole world":cs.reg} · counts on the leaderboard, no Practice Mode.`;
+  $("csNote").textContent = csNote();
   $("csStart").disabled = cs.busy;
   $("csStart").textContent = cs.busy ? "Starting\u2026" : "Start";
 }
+/* What the round about to start actually is, in one line under the controls. A solo round obeys
+   the Practice Mode switch, so it says so: an unscored round dressed up as a scored one is the
+   one thing this line must never do. A challenge is never practice. */
+function csNote(){
+  const head = `${MODE_SHORT[cs.mode]} Mode · ${cs.len} question${cs.len===1?"":"s"} · `
+    + `${cs.reg==="all"?"the whole world":cs.reg}`;
+  if(!csSolo()) return head + " · counts on the leaderboard, no Practice Mode.";
+  return head + (settings.practice
+    ? " · Practice Mode is on, so this one is not scored."
+    : " · counts on the leaderboard.");
+}
 function csClamp(){ cs.len = Math.min(Math.max(1, cs.len), csMax()); if(![5,10,20].includes(cs.len)) cs.custom = true; }
 
-function openChalSetup(name){
+function openChalSetup(name, mode){
   cs.to = name;
-  cs.mode = lastMode; cs.reg = settings.reg; cs.len = settings.len; cs.custom = settings.custom;
+  cs.mode = MODE_LABEL[mode] ? mode : lastMode;
+  cs.reg = settings.reg; cs.len = settings.len; cs.custom = settings.custom;
   cs.busy = false;
   csClamp();
   $("csErr").textContent = "";
@@ -2129,18 +2157,29 @@ $("csNum").oninput = e=>{
   const v = Math.round(+e.target.value);
   if(!Number.isFinite(v) || v < 1) return;     // mid-typing
   cs.len = Math.min(v, csMax());
-  $("csNote").textContent =
-    `${MODE_SHORT[cs.mode]} Mode · ${cs.len} question${cs.len===1?"":"s"} · `
-    + `${cs.reg==="all"?"the whole world":cs.reg} · counts on the leaderboard, no Practice Mode.`;
+  $("csNote").textContent = csNote();
 };
 $("csNum").onblur = ()=>{ csClamp(); paintChalSetup(); };
 $("csCancel").onclick = closeChalSetup;
 
 /* Start creates the challenge and then plays it. The round cannot begin before the server has
    the set, because the id it hands back is how this half is reported and how the other player
-   gets the identical questions. Offline there is no challenge to make, so it says so. */
+   gets the identical questions. Offline there is no challenge to make, so it says so.
+
+   A solo round needs none of that and starts on the spot. Its choices are the home screen's, so
+   they are written back there rather than living for one round: this dialog is that screen's
+   settings reached from somewhere else, not a second set of them. */
 $("csStart").onclick = async ()=>{
   if(cs.busy) return;
+  if(csSolo()){
+    settings.reg = cs.reg; settings.len = cs.len; settings.custom = cs.custom;
+    store.set("reg",settings.reg); store.set("len",settings.len); store.set("custom",settings.custom);
+    paintSettings();
+    closeChalSetup();
+    lastChallenge = null;
+    startRound(cs.mode);
+    return;
+  }
   cs.busy = true; $("csErr").textContent = ""; paintChalSetup();
   const { to, mode, reg, len } = cs;
   const questions = buildChallengeSet(mode, reg, len);
@@ -2175,7 +2214,13 @@ function refreshSocial(){
     paintFriends();
     if($("board").classList.contains("on")) paintBoard();
   }).catch(()=>{});
-}$("boardPlay").onclick = ()=>{ lastChallenge=null; startRound(boardMode); };
+}
+
+/* The board's Play button asks before it starts. It used to begin a round of whatever length the
+   home screen happened to hold, which was at least visible on the board itself; now that the
+   board covers every length at once there is nothing on screen to say what would be played, so
+   the setup opens on the mode whose board is showing and the player chooses the rest. */
+$("boardPlay").onclick = ()=>openChalSetup("", boardMode);
 
 /* ===== Name gate =====
    Two ways in: the first visit, where there is no way past it, and the Switch button, where the

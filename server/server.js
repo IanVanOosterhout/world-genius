@@ -121,11 +121,15 @@ async function recordScore(b) {
 }
 
 /* Ordering matches the local board exactly: score, then the streak behind it, then who got there
-   first, so the same round ranks the same way whichever board it is read from. */
+   first, so the same round ranks the same way whichever board it is read from.
+
+   Round length is not part of the question. A board is every player's best round of this mode and
+   region however long they made it, ranked by how many they got right: 19 out of 20 stands above
+   18 out of 100, and 20 out of 100 above both. Rows are still stored per length, so DISTINCT ON
+   picks each player's best one and the board ranks people rather than rounds. */
 async function readBoard(q) {
-  const len = Number(q.len);
-  const params = [q.mode, len, q.reg];
-  let where = "s.mode = $1 AND s.len = $2 AND s.reg = $3";
+  const params = [q.mode, q.reg];
+  let where = "s.mode = $1 AND s.reg = $2";
   if (q.scope === "friends") {
     params.push(q.playerId);
     // Your own row belongs on your friends board: a board you are not on is not a comparison.
@@ -134,15 +138,19 @@ async function readBoard(q) {
   }
   params.push(BOARD_LIMIT);
   const { rows } = await pool.query(
-    `SELECT p.name, s.player_id, s.score, s.streak, s.rounds
-       FROM scores s JOIN players p ON p.id = s.player_id
-      WHERE ${where}
-      ORDER BY s.score DESC, s.streak DESC, s.at ASC
-      LIMIT $${params.length}`,
+    `SELECT * FROM (
+       SELECT DISTINCT ON (s.player_id)
+              p.name, s.player_id, s.score, s.len, s.streak, s.rounds, s.at
+         FROM scores s JOIN players p ON p.id = s.player_id
+        WHERE ${where}
+        ORDER BY s.player_id, s.score DESC, s.streak DESC, s.at ASC
+     ) best
+     ORDER BY best.score DESC, best.streak DESC, best.at ASC
+     LIMIT $${params.length}`,
     params
   );
   return rows.map((r, i) => ({
-    rank: i + 1, name: r.name, score: r.score, streak: r.streak, rounds: r.rounds,
+    rank: i + 1, name: r.name, score: r.score, len: r.len, streak: r.streak, rounds: r.rounds,
     you: q.playerId ? r.player_id === q.playerId : false,
   }));
 }
@@ -343,9 +351,9 @@ const server = http.createServer(async (req, res) => {
 
     if (path === "/v1/board" && req.method === "GET") {
       const q = {
+        // A `len` from an older page is read and ignored: its board is now every length at once.
         scope: url.searchParams.get("scope") || "world",
         mode: url.searchParams.get("mode"),
-        len: url.searchParams.get("len"),
         reg: url.searchParams.get("reg") || "all",
         playerId: url.searchParams.get("playerId") || "",
       };

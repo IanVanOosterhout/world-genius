@@ -73,9 +73,10 @@ export function validRound(b) {
   return validResult(b, b.len);
 }
 
+/* A board query names a mode and a region and nothing else: the length of the round is not part
+   of what a board covers any more, so a query carrying one is neither required nor refused. */
 export function validQuery(q) {
   if (!MODES.has(q.mode)) return "mode";
-  if (!validLen(Number(q.len))) return "len";
   if (!REGIONS.has(q.reg)) return "reg";
   if (q.scope !== "world" && q.scope !== "friends") return "scope";
   if (q.scope === "friends" && !validPlayerId(q.playerId)) return "playerId";

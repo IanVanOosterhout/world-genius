@@ -107,17 +107,21 @@ async function runMigration() {
       to_played_at   TIMESTAMPTZ
     );
 
-    CREATE INDEX IF NOT EXISTS scores_board_idx
-      ON scores (mode, len, reg, score DESC, streak DESC, at ASC);
+    -- Board order: one player's best round of a mode and region, then those ranked against each
+    -- other. Length is not in it, because a board no longer separates the round lengths.
+    CREATE INDEX IF NOT EXISTS scores_best_idx
+      ON scores (mode, reg, player_id, score DESC, streak DESC, at ASC);
     CREATE INDEX IF NOT EXISTS friends_player_idx ON friends (player_id);
     CREATE INDEX IF NOT EXISTS friend_requests_to_idx ON friend_requests (to_id);
   `);
 
   // Crews were replaced by friends and challenges. Dropping them keeps the schema honest about
-  // what the game actually does.
+  // what the game actually does. The old board index led on (mode, len, reg) and no query asks
+  // that any more, so it is dead weight on every write.
   await pool.query(`
     DROP TABLE IF EXISTS crew_members;
     DROP TABLE IF EXISTS crews;
+    DROP INDEX IF EXISTS scores_board_idx;
   `);
 
   /* Bring a database built under the old challenge model forward rather than dropping it. Back

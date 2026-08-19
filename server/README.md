@@ -14,7 +14,7 @@ from finished rounds submitted by players.
 | `GET`  | `/health` | Liveness, and whether the database is reachable |
 | `POST` | `/v1/name` | Claim a name; 409 if someone else holds it |
 | `POST` | `/v1/score` | Submit a finished round |
-| `GET`  | `/v1/board` | Read a board: `scope=world\|friends`, `mode`, `len`, `reg`, `playerId` |
+| `GET`  | `/v1/board` | Read a board: `scope=world\|friends`, `mode`, `reg`, `playerId` |
 | `GET`  | `/v1/friends` | Your friends, requests waiting on you, and requests you sent |
 | `POST` | `/v1/friends` | Ask someone to be friends, by name |
 | `POST` | `/v1/friends/accept` | Accept a request, which makes it mutual |
@@ -40,6 +40,18 @@ of them can start at once and neither waits on the other to finish. The two side
 each score is null until that player has played, `/v1/challenge/result` works out which half the
 caller is reporting, and whoever finishes second is the one who sees the verdict. The challenger is
 just the person who chose the rules.
+
+## Boards
+
+A board is one mode and one region, ranked by how many questions were answered right. The round
+length is not part of the query: 19 out of 20 outranks 18 out of 100, and 20 out of 100 outranks
+both. Rows are still stored per `(player_id, mode, len, reg)`, so `DISTINCT ON (player_id)` picks
+each player's best round and the ranking is over people rather than rounds. Each row carries the
+`len` behind its score, since the board no longer has one of its own.
+
+Order is score, then the streak behind it, then who got there first, and it matches the board the
+browser builds from `localStorage` exactly, so the same round ranks the same way on either. A
+`len` parameter from an older page is read and ignored rather than refused.
 
 ## Origins
 

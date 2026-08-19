@@ -82,10 +82,18 @@ the results screen.
 or type a new one. Each person is only ever asked for a name once. Scores, personal bests and the
 resume card are per player, so a friend taking a turn cannot inherit or overwrite yours.
 
-A board covers one setup at a time, since a score is only worth comparing against the same mode,
-the same number of questions and the same region. Its tabs pick the mode; the round length and
-region come from the home screen. Ranking is by score, then by the longest streak behind it, then
-by whoever got there first.
+A board covers one mode and one region, and **ranks by how many questions were answered right,
+whatever the round length**. 19 out of 20 stands above 18 out of 100, and 20 out of 100 above
+both. Each row shows the length behind the score. Its tabs pick the mode; the region comes from
+the home screen. Ties break on the longest streak behind the score, then on whoever got there
+first.
+
+Personal bests are still kept per length, so one player can hold several. Only their best goes on
+the board: a board ranks people, not rounds.
+
+**Play this mode**, under the board, opens the round setup on the mode whose board is showing.
+Pick the mode, region and length, then Start. It asks rather than assuming, because the board
+covers every length at once and so cannot show what a round started from it would be.
 
 ### This device, Friends, World, Challenges
 
