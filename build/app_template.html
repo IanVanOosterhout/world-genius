@@ -2163,6 +2163,13 @@ $("csStart").onclick = async ()=>{
    up the game: a failure leaves the cards hidden and the rest of the screen exactly as it was. */
 function refreshSocial(){
   if(!player) return;
+  /* Make good on the promise claimName makes when it cannot reach the server. It answers
+     `{ok:true, offline:true}` and says the name will be claimed next time something gets through,
+     but nothing ever tried again: the gate is the only other caller, and it runs once ever. A
+     device whose first claim failed therefore kept its name locally while the server never heard
+     of it, so a friend typing that name was told nobody was playing under it. Retried on every
+     load, and harmless once it has stuck, since re-claiming your own name is a no-op. */
+  claimName(player).catch(()=>{});
   loadChallenges().then(paintChallenges).catch(()=>{});
   loadFriends().then(()=>{
     paintFriends();

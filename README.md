@@ -158,6 +158,14 @@ The client also used to report every failure as "could not reach the server", in
 the server had answered clearly. It now separates not reaching the server from being refused by
 it, and says which.
 
+There was a second half to the same bug. A name is claimed on the server when you first type it,
+and if that call fails the game carries on with the name saved locally, on the principle that the
+round matters more than the name. It was supposed to claim it again next time it reached the
+server, and never did: the name gate was the only thing that ever claimed, and it runs once. So a
+device whose first claim failed kept a name the server had never heard of, and a friend typing it
+was told nobody was playing under it. The claim is now retried on every load, which is a no-op
+once it has stuck.
+
 **A public board is only as honest as the people on it.** The game runs entirely in the page, so
 anyone who opens the developer console can post a score they did not earn. The server refuses
 anything the game could not have produced and rate-limits submissions, which stops accidents and
