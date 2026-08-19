@@ -54,7 +54,10 @@ Kosovo.
 
 ## Options
 
-- **Questions per round**, 5, 10 or 20
+- **Questions per round**, 5, 10, 20, or **Custom** for any number. The maximum is the number of
+  countries in the chosen region, because a country is asked at most once per round. Narrowing the
+  region brings the length down with it if it no longer fits, and presets that do not fit are
+  greyed out.
 - **Region**, whole world, or drill into Africa, Asia or Europe
 - **Zoom sensitivity**, 0.3x to 2.5x, default 1x. Scales how far one scroll notch or pinch zooms
   the map. The +/- buttons keep their fixed steps.

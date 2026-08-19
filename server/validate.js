@@ -6,8 +6,17 @@
    clients and idle tampering from polluting a board. See server/README.md. */
 
 export const MODES = new Set(["fact", "flag", "capital"]);
-export const LENS = new Set([5, 10, 20]);
-export const REGIONS = new Set(["all", "Africa", "Asia", "Europe"]);
+/* Round length is a free number now, not one of three presets, so the check is a range. The
+   upper bound is the number of playable countries: the game will not let anyone pick a round
+   longer than the region can fill. */
+export const LEN_MIN = 1;
+export const LEN_MAX = 197;
+export const validLen = (v) => Number.isInteger(v) && v >= LEN_MIN && v <= LEN_MAX;
+/* Every region the country data actually has, not the subset the home screen currently offers
+   as filter buttons. Pinning this to the UI meant a region the game could legitimately start
+   using would have its scores refused, and refused permanently, which is worse than useless. */
+export const REGIONS = new Set(["all",
+  "Africa", "Asia", "Europe", "North America", "South America", "Oceania"]);
 export const NAME_MAX = 14;
 export const CLUES_PER_COUNTRY = 10;
 
@@ -44,7 +53,7 @@ export function validQuestions(q, len) {
 
 export function validSetup(b) {
   if (!MODES.has(b.mode)) return "mode";
-  if (!Number.isInteger(b.len) || !LENS.has(b.len)) return "len";
+  if (!validLen(b.len)) return "len";
   if (typeof b.reg !== "string" || !REGIONS.has(b.reg)) return "reg";
   return null;
 }
@@ -66,8 +75,7 @@ export function validRound(b) {
 
 export function validQuery(q) {
   if (!MODES.has(q.mode)) return "mode";
-  const len = Number(q.len);
-  if (!Number.isInteger(len) || !LENS.has(len)) return "len";
+  if (!validLen(Number(q.len))) return "len";
   if (!REGIONS.has(q.reg)) return "reg";
   if (q.scope !== "world" && q.scope !== "friends") return "scope";
   if (q.scope === "friends" && !validPlayerId(q.playerId)) return "playerId";
